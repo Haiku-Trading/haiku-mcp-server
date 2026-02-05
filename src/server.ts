@@ -35,7 +35,9 @@ const TOOLS = [
   {
     name: "haiku_get_tokens",
     description:
-      "Get a list of supported tokens for trading on the Haiku platform. " +
+      "Get supported tokens and DeFi positions for trading. " +
+      "Includes vanilla tokens, Aave collateral/debt, yield vaults, and LP tokens. " +
+      "Use category filter to narrow results (e.g., 'collateral' for Aave aTokens). " +
       "Returns token IIDs (unique identifiers), symbols, names, prices, and chain information. " +
       "Use the IID format (chainSlug:tokenAddress) when specifying tokens in other tools.",
     inputSchema: {
@@ -45,6 +47,22 @@ const TOOLS = [
           type: "number",
           description:
             "Filter tokens by chain ID. Common chains: 42161 (Arbitrum), 8453 (Base), 1 (Ethereum), 137 (Polygon), 10 (Optimism), 56 (BSC)",
+        },
+        category: {
+          type: "string",
+          enum: [
+            "token",
+            "collateral",
+            "varDebt",
+            "vault",
+            "weightedLiquidity",
+            "concentratedLiquidity",
+          ],
+          description:
+            "Filter by token category: 'token' (vanilla tokens), 'collateral' (Aave aTokens), " +
+            "'varDebt' (Aave debt tokens), 'vault' (Yearn/Morpho vaults), " +
+            "'weightedLiquidity' (Balancer LP), 'concentratedLiquidity' (Uniswap V3 LP). " +
+            "Omit to return all categories.",
         },
       },
     },

@@ -18,10 +18,38 @@ export interface Token {
   priceUSD: string;
   logoURI?: string;
   iid: TokenIID;
-  protocol?: string;
+  protocol?: string;           // "AAVE_V3", "MORPHO", "BALANCER_V2", "UNISWAP_V3"
   primaryColor?: string;
   tokenCategory: string;
   url?: string;
+
+  // DeFi common fields
+  underlying_iid?: string;     // Single underlying (collateral, debt, vault)
+  underlying_iids?: string[];  // Multiple underlyings (LP tokens)
+
+  // Collateral-specific (Aave)
+  max_ltv?: number;            // Max loan-to-value ratio (e.g., 0.63)
+  liquidation_threshold?: number;  // Liquidation threshold (e.g., 0.77)
+  liquidation_penalty?: number;    // Liquidation penalty (e.g., 0.05)
+
+  // Debt-specific (Aave)
+  reserve_factor?: number;     // Reserve factor (e.g., 0.25)
+
+  // Yield fields
+  apy?: string;                // APY as string (collateral/debt)
+  minApy?: number;             // Min APY as number (vaults, LP)
+  maxApy?: number;             // Max APY as number (vaults, LP)
+
+  // LP-specific
+  weights?: number[];          // Pool weights (weighted LP)
+  feeTier?: number;            // Fee tier (concentrated LP, e.g., 0.05)
+  poolId?: string;             // Pool identifier
+
+  // Metadata (nested)
+  metadata?: {
+    tvl?: string | number;
+    volume24h?: number;
+  };
 }
 
 /**
@@ -31,6 +59,11 @@ export interface TokenListResponse {
   tokenCategories: string[];
   tokenList: {
     tokens: Token[];
+    collateralTokens: Token[];
+    varDebtTokens: Token[];
+    vaultTokens: Token[];
+    weightedLiquidityTokens: Token[];
+    concentratedLiquidityTokens: Token[];
   };
 }
 

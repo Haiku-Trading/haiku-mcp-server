@@ -2,6 +2,20 @@ import { z } from "zod";
 import type { HaikuClient } from "../api/haiku-client.js";
 
 /**
+ * Valid token categories for filtering
+ */
+export const tokenCategories = [
+  "token",
+  "collateral",
+  "varDebt",
+  "vault",
+  "weightedLiquidity",
+  "concentratedLiquidity",
+] as const;
+
+export type TokenCategory = (typeof tokenCategories)[number];
+
+/**
  * Schema for haiku_get_tokens tool parameters
  */
 export const getTokensSchema = z.object({
@@ -10,6 +24,15 @@ export const getTokensSchema = z.object({
     .optional()
     .describe(
       "Filter tokens by chain ID (e.g., 42161 for Arbitrum, 8453 for Base, 1 for Ethereum)"
+    ),
+  category: z
+    .enum(tokenCategories)
+    .optional()
+    .describe(
+      "Filter by token category: 'token' (vanilla tokens), 'collateral' (Aave aTokens), " +
+        "'varDebt' (Aave debt tokens), 'vault' (Yearn/Morpho vaults), " +
+        "'weightedLiquidity' (Balancer LP), 'concentratedLiquidity' (Uniswap V3 LP). " +
+        "Omit to return all categories."
     ),
 });
 
@@ -34,12 +57,28 @@ export async function handleGetTokens(
   params: GetTokensParams
 ) {
   const response = await client.getTokenList(params.chainId);
-  const tokens = response.tokenList.tokens;
+  const { tokenList } = response;
+
+  // Map category parameter to token list array key
+  const categoryMap: Record<TokenCategory, typeof tokenList.tokens> = {
+    token: tokenList.tokens || [],
+    collateral: tokenList.collateralTokens || [],
+    varDebt: tokenList.varDebtTokens || [],
+    vault: tokenList.vaultTokens || [],
+    weightedLiquidity: tokenList.weightedLiquidityTokens || [],
+    concentratedLiquidity: tokenList.concentratedLiquidityTokens || [],
+  };
+
+  // Filter by category or merge all
+  const tokens = params.category
+    ? categoryMap[params.category]
+    : Object.values(categoryMap).flat();
 
   return {
     tokenCategories: response.tokenCategories,
     tokenCount: tokens.length,
     tokens: tokens.map((token) => ({
+      // Core fields
       iid: token.iid,
       symbol: token.symbol,
       name: token.name,
@@ -47,6 +86,38 @@ export async function handleGetTokens(
       decimals: token.decimals,
       priceUSD: token.priceUSD,
       category: token.tokenCategory,
+
+      // DeFi fields (conditionally included)
+      ...(token.protocol && { protocol: token.protocol }),
+      ...(token.underlying_iid && { underlying_iid: token.underlying_iid }),
+      ...(token.underlying_iids && { underlying_iids: token.underlying_iids }),
+
+      // Collateral fields
+      ...(token.max_ltv !== undefined && { max_ltv: token.max_ltv }),
+      ...(token.liquidation_threshold !== undefined && {
+        liquidation_threshold: token.liquidation_threshold,
+      }),
+      ...(token.liquidation_penalty !== undefined && {
+        liquidation_penalty: token.liquidation_penalty,
+      }),
+
+      // Debt fields
+      ...(token.reserve_factor !== undefined && {
+        reserve_factor: token.reserve_factor,
+      }),
+
+      // Yield fields
+      ...(token.apy && { apy: token.apy }),
+      ...(token.minApy !== undefined && { minApy: token.minApy }),
+      ...(token.maxApy !== undefined && { maxApy: token.maxApy }),
+
+      // LP fields
+      ...(token.weights && { weights: token.weights }),
+      ...(token.feeTier !== undefined && { feeTier: token.feeTier }),
+      ...(token.poolId && { poolId: token.poolId }),
+
+      // TVL from metadata
+      ...(token.metadata?.tvl !== undefined && { tvl: token.metadata.tvl }),
     })),
   };
 }
