@@ -1,6 +1,6 @@
 {
   "name": "haiku-mcp-server",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "MCP server for Haiku API - enables AI agents to execute any blockchain transactions",
   "type": "module",
   "main": "dist/index.js",
