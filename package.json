@@ -1,7 +1,7 @@
 {
   "name": "haiku-mcp-server",
-  "version": "1.0.0",
-  "description": "MCP server for Haiku API - enables AI agents to execute blockchain transactions",
+  "version": "0.0.1",
+  "description": "MCP server for Haiku API - enables AI agents to execute any blockchain transactions",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -24,7 +24,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/user/haiku-mcp-server"
+    "url": "https://github.com/Haiku-Trading/haiku-mcp-server"
   },
   "homepage": "https://docs.haiku.trade",
   "dependencies": {

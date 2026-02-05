@@ -2,14 +2,16 @@
 
 An MCP (Model Context Protocol) server that enables AI agents to execute blockchain transactions via the [Haiku API](https://docs.haiku.trade).
 
+[![npm version](https://badge.fury.io/js/haiku-mcp-server.svg)](https://www.npmjs.com/package/haiku-mcp-server)
+[![GitHub](https://img.shields.io/badge/GitHub-Haiku--Trading%2Fhaiku--mcp--server-blue)](https://github.com/Haiku-Trading/haiku-mcp-server)
+
 ## Features
 
-- **Token Discovery**: List supported tokens across 18+ blockchain networks
+- **Token Discovery**: List supported tokens and DeFi assets across 18+ blockchain networks
 - **Balance Checking**: Get wallet balances across all supported chains
 - **Trading Quotes**: Get quotes for swaps and portfolio rebalancing
 - **Transaction Building**: Convert quotes to unsigned EVM transactions
 - **Natural Language**: Convert plain English to structured trading intents
-- **Simple Swaps**: High-level convenience tool for straightforward token swaps
 
 ## Installation
 
@@ -69,15 +71,23 @@ With API key for higher rate limits:
 
 ### `haiku_get_tokens`
 
-Get a list of supported tokens for trading.
+Get supported tokens and DeFi assets for trading.
 
 **Parameters:**
 - `chainId` (optional): Filter by chain ID (e.g., 42161 for Arbitrum)
+- `category` (optional): Filter by token category:
+  - `token` - Vanilla tokens (ETH, USDC, etc.)
+  - `collateral` - eg. Aave aTokens (deposited collateral)
+  - `varDebt` - eg. Aave variable debt tokens
+  - `vault` - eg. Yearn/Morpho yield vaults
+  - `weightedLiquidity` - eg. Balancer LP tokens
+  - `concentratedLiquidity` - eg. Uniswap V3 LP positions
 
 **Example:**
 ```json
 {
-  "chainId": 42161
+  "chainId": 42161,
+  "category": "token"
 }
 ```
 
@@ -151,13 +161,14 @@ Convert natural language to a structured trading intent.
   "walletAddress": "0x..."
 }
 ```
+
 ## Token IID Format
 
 Tokens are identified using the IID format: `chainSlug:tokenAddress`
 
 Examples:
 - `arb:0x82aF49447D8a07e3bd95BD0d56f35241523fBab1` - WETH on Arbitrum
-- `eth:0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee` - Native ETH
+- `arb:0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee` - Native ETH on Arbitrum
 - `base:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` - USDC on Base
 
 ## Supported Chains
@@ -178,9 +189,10 @@ Examples:
 ### Simple Swap
 
 ```
-1. Call haiku_execute_swap with input/output tokens
-2. If no Permit2 required: Sign and broadcast the returned transaction
-3. If Permit2 required: Sign permit2Datas, then call haiku_solve
+1. Call haiku_get_quote with input tokens and target outputs
+2. If permit2Datas returned: Sign the EIP-712 typed data
+3. Call haiku_solve with quoteId (and permit2Signature if needed)
+4. Sign and broadcast the returned transaction
 ```
 
 ### Portfolio Rebalance
