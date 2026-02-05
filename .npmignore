@@ -1,0 +1,13 @@
+# Scripts and tests
+scripts/
+qa-payloads/
+
+# Source (ship compiled dist/ only)
+src/
+tsconfig.json
+
+# Dev configs
+.env*
+.git*
+.claude/
+*.log

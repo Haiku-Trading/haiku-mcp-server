@@ -4,6 +4,9 @@ node_modules/
 # Build output
 dist/
 
+# QA test output
+qa-payloads/
+
 # Environment files (may contain API keys)
 .env
 .env.local
