@@ -7,11 +7,10 @@ An MCP (Model Context Protocol) server that enables AI agents to execute blockch
 
 ## Features
 
-- **Token Discovery**: List supported tokens and DeFi assets across 18+ blockchain networks
+- **Token Discovery**: List supported tokens and DeFi assets across 21 blockchain networks
 - **Balance Checking**: Get wallet balances across all supported chains
 - **Trading Quotes**: Get quotes for swaps and portfolio rebalancing
 - **Transaction Building**: Convert quotes to unsigned EVM transactions
-- **Natural Language**: Convert plain English to structured trading intents
 
 ## Installation
 
@@ -109,6 +108,8 @@ Get token balances for a wallet address across all chains.
 
 Get a quote for a token swap or portfolio rebalance.
 
+> **Note:** Quotes expire after ~30 seconds. If `haiku_solve` returns error 200000 (quote expired), request a fresh quote and retry the flow.
+
 **Parameters:**
 - `inputPositions` (required): Map of token IID to amount to spend
 - `targetWeights` (required): Map of output token IID to weight (must sum to 1)
@@ -146,22 +147,6 @@ Convert a quote into an unsigned EVM transaction.
 }
 ```
 
-### `haiku_natural_language_intent`
-
-Convert natural language to a structured trading intent.
-
-**Parameters:**
-- `prompt` (required): Natural language instruction
-- `walletAddress` (required): Wallet address for balance context
-
-**Example:**
-```json
-{
-  "prompt": "swap all my WETH for USDC",
-  "walletAddress": "0x..."
-}
-```
-
 ## Token IID Format
 
 Tokens are identified using the IID format: `chainSlug:tokenAddress`
@@ -176,13 +161,26 @@ Examples:
 | Chain | Chain ID | Slug |
 |-------|----------|------|
 | Arbitrum | 42161 | arb |
-| Base | 8453 | base |
-| Ethereum | 1 | eth |
-| Polygon | 137 | polygon |
-| Optimism | 10 | op |
-| BSC | 56 | bsc |
 | Avalanche | 43114 | avax |
-| And 11 more... | | |
+| Base | 8453 | base |
+| Berachain | 80094 | bera |
+| BNB Smart Chain | 56 | bsc |
+| Bob | 60808 | bob |
+| Ethereum | 1 | eth |
+| Gnosis | 100 | gnosis |
+| Hyperliquid | 999 | hype |
+| Katana | 747474 | katana |
+| Lisk | 1135 | lisk |
+| Monad | 143 | monad |
+| Optimism | 10 | opt |
+| Plasma | 9745 | plasma |
+| Polygon | 137 | poly |
+| Scroll | 534352 | scroll |
+| Sei | 1329 | sei |
+| Sonic | 146 | sonic |
+| Unichain | 130 | uni |
+| World Chain | 480 | worldchain |
+| ApeChain | 33139 | ape |
 
 ## Workflow Examples
 
@@ -205,14 +203,6 @@ Examples:
 5. Sign and broadcast
 ```
 
-### Natural Language Trading
-
-```
-1. Call haiku_natural_language_intent with prompt like "swap half my ETH to USDC"
-2. Use returned intent with haiku_get_quote
-3. Complete the quote → solve → sign → broadcast flow
-```
-
 ## Transaction Signing
 
 This MCP server returns **unsigned transactions only**. The AI agent is responsible for:
@@ -223,6 +213,21 @@ This MCP server returns **unsigned transactions only**. The AI agent is responsi
 4. Broadcasting to the network
 
 This design keeps private keys secure and allows agents to use any signing method (hardware wallets, custodial services, MPC, etc.).
+
+## Cross-Chain Bridge Signatures
+
+For cross-chain swaps, the quote may return `isComplexBridge: true` with a `destinationBridge` object.
+
+**When it's needed:** Check `quote.isComplexBridge === true`
+
+**What to sign:** `quote.destinationBridge.unsignedTypeV4Digest` (EIP-712 typed data)
+
+**Workflow:**
+1. Get quote with `haiku_get_quote`
+2. If `isComplexBridge` is true:
+   - Sign the `destinationBridge.unsignedTypeV4Digest` typed data
+   - Pass the signature as `userSignature` to `haiku_solve`
+3. Sign and broadcast the returned transaction
 
 ## Development
 

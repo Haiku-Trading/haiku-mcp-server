@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { HaikuClient } from "../api/haiku-client.js";
 import type { QuoteToolResponse } from "../types/index.js";
+import { sanitizeBigInts } from "../utils/sanitize.js";
 
 /**
  * Schema for haiku_get_quote tool parameters
@@ -48,11 +49,14 @@ export async function handleGetQuote(
   const requiresPermit2Signature = !!response.permit2Datas;
   const requiresBridgeSignature = response.isComplexBridge && !!response.destinationBridge;
 
-  return {
+  // Sanitize BigInt hex objects to strings for JSON serialization
+  const sanitized = sanitizeBigInts({
     ...response,
     requiresPermit2Signature,
     requiresBridgeSignature,
-  };
+  }) as QuoteToolResponse;
+
+  return sanitized;
 }
 
 /**

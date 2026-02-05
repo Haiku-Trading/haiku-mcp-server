@@ -22,12 +22,6 @@ import {
   handleSolve,
   formatSolveResponse,
 } from "./tools/solve.js";
-import {
-  naturalLanguageIntentSchema,
-  handleNaturalLanguageIntent,
-  formatNaturalLanguageIntentResponse,
-} from "./tools/natural-language.js";
-
 /**
  * Tool definitions for the MCP server
  */
@@ -144,28 +138,6 @@ const TOOLS = [
       required: ["quoteId"],
     },
   },
-  {
-    name: "haiku_natural_language_intent",
-    description:
-      "Convert a natural language trading instruction into a structured intent. " +
-      'Examples: "swap all my WETH for USDC", "convert half my ETH to stablecoins". ' +
-      "Automatically fetches wallet balances for context. " +
-      "Returns an intent object ready to use with haiku_get_quote.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        prompt: {
-          type: "string",
-          description: "Natural language trade instruction",
-        },
-        walletAddress: {
-          type: "string",
-          description: "Wallet address for balance context",
-        },
-      },
-      required: ["prompt", "walletAddress"],
-    },
-  },
 ];
 
 /**
@@ -240,17 +212,6 @@ export function createServer(): Server {
           return {
             content: [
               { type: "text", text: formatSolveResponse(result) },
-            ],
-          };
-        }
-
-        case "haiku_natural_language_intent": {
-          const params = naturalLanguageIntentSchema.parse(args);
-          const result = await handleNaturalLanguageIntent(haikuClient, params);
-          return {
-            content: [
-              { type: "text", text: formatNaturalLanguageIntentResponse(result) },
-              { type: "text", text: "\n\nRaw intent:\n" + JSON.stringify(result.intent, null, 2) },
             ],
           };
         }

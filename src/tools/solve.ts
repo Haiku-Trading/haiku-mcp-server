@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { HaikuClient } from "../api/haiku-client.js";
 import type { UnsignedTransaction } from "../types/index.js";
+import { sanitizeBigInts } from "../utils/sanitize.js";
 
 /**
  * Schema for haiku_solve tool parameters
@@ -32,11 +33,14 @@ export async function handleSolve(
   client: HaikuClient,
   params: SolveParams
 ): Promise<UnsignedTransaction> {
-  return client.solve({
+  const response = await client.solve({
     quoteId: params.quoteId,
     permit2Signature: params.permit2Signature,
     userSignature: params.userSignature,
   });
+
+  // Sanitize BigInt hex objects to strings for JSON serialization
+  return sanitizeBigInts(response) as UnsignedTransaction;
 }
 
 /**

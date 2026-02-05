@@ -99,32 +99,8 @@ async function main() {
     console.log();
   }
 
-  // Test 3: Natural Language Intent
-  console.log("3. Testing haiku_natural_language_intent...");
-  console.log("-".repeat(40));
-  try {
-    // First get balances for context
-    if (!balances) {
-      balances = await client.getTokenBalances(TEST_WALLET);
-    }
-
-    const nlResult = await client.buildNaturalLanguageIntent({
-      text_prompt: "swap 0.001 ETH for USDC on Arbitrum",
-      wallet_positions: balances.wallet_positions,
-      prices: balances.prices,
-    });
-    console.log(`✓ Intent parsed successfully`);
-    console.log(`  Input positions:`, nlResult.intent?.inputPositions);
-    console.log(`  Target weights:`, nlResult.intent?.targetWeights);
-    console.log();
-  } catch (e) {
-    console.error(`✗ Error: ${e}`);
-    console.log(`  (NL API may have backend issues - continuing with other tests)`);
-    console.log();
-  }
-
-  // Test 4: Get Quote (using native ETH to avoid Permit2)
-  console.log("4. Testing haiku_get_quote (native ETH -> USDC on Arbitrum)...");
+  // Test 3: Get Quote (using native ETH to avoid Permit2)
+  console.log("3. Testing haiku_get_quote (native ETH -> USDC on Arbitrum)...");
   console.log("-".repeat(40));
   let quoteId: string | undefined;
   let requiresPermit2 = false;
@@ -169,8 +145,8 @@ async function main() {
     console.log();
   }
 
-  // Test 5: Solve (build unsigned transaction)
-  console.log("5. Testing haiku_solve...");
+  // Test 4: Solve (build unsigned transaction)
+  console.log("4. Testing haiku_solve...");
   console.log("-".repeat(40));
   if (quoteId && !requiresPermit2) {
     try {
