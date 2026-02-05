@@ -11,6 +11,8 @@ An MCP (Model Context Protocol) server that enables AI agents to execute blockch
 - **Balance Checking**: Get wallet balances across all supported chains
 - **Trading Quotes**: Get quotes for swaps and portfolio rebalancing
 - **Transaction Building**: Convert quotes to unsigned EVM transactions
+- **Wallet Integration**: Extract EIP-712 payloads for external wallet signing (Coinbase, AgentKit, Safe, etc.)
+- **Self-Contained Execution**: Optional end-to-end execution with WALLET_PRIVATE_KEY env var
 
 ## Installation
 
@@ -32,6 +34,8 @@ npx haiku-mcp-server
 |----------|----------|-------------|
 | `HAIKU_API_KEY` | No | Your Haiku API key for higher rate limits. Contact contact@haiku.trade to request one. |
 | `HAIKU_BASE_URL` | No | API base URL. Defaults to `https://api.haiku.trade/v1` |
+| `WALLET_PRIVATE_KEY` | No | Private key (0x hex) for self-contained execution via `haiku_execute`. |
+| `RPC_URL_{chainId}` | No | Override RPC URL for a specific chain (e.g., `RPC_URL_42161` for Arbitrum). |
 
 > **Note:** The API works without a key, but providing one unlocks higher rate limits for production use.
 
@@ -147,6 +151,63 @@ Convert a quote into an unsigned EVM transaction.
 }
 ```
 
+### `haiku_prepare_signatures`
+
+Extract EIP-712 signing payloads from a quote for external wallet integration.
+
+Use this when integrating with wallet MCPs (Coinbase Payments MCP, wallet-agent, AgentKit, Safe, etc.). Returns standardized typed data that any wallet's `signTypedData` can handle.
+
+**Parameters:**
+- `quoteResponse` (required): Full response object from `haiku_get_quote`
+
+**Returns:**
+- `quoteId`: Quote ID to pass to `haiku_solve`
+- `sourceChainId`: Chain ID for the transaction
+- `requiresPermit2`: Whether Permit2 signature is needed
+- `permit2`: EIP-712 payload for Permit2 (if required)
+- `requiresBridgeSignature`: Whether bridge signature is needed
+- `bridgeIntent`: EIP-712 payload for bridge (if required)
+- `instructions`: Step-by-step instructions for completing the flow
+
+**Example:**
+```json
+{
+  "quoteResponse": { /* full quote from haiku_get_quote */ }
+}
+```
+
+### `haiku_execute`
+
+Execute a quote end-to-end with flexible signing options.
+
+**Modes:**
+1. **Self-contained**: Set `WALLET_PRIVATE_KEY` env var → signs + solves + broadcasts automatically
+2. **External signatures**: Pass pre-signed `permit2Signature`/`userSignature` from wallet MCP
+3. **Prepare-only**: Set `broadcast=false` to get unsigned tx for external broadcasting
+
+**Parameters:**
+- `quoteResponse` (required): Full response object from `haiku_get_quote`
+- `permit2Signature` (optional): Pre-signed Permit2 signature from external wallet
+- `userSignature` (optional): Pre-signed bridge signature from external wallet
+- `broadcast` (optional): If true (default), broadcasts tx. If false, returns unsigned tx.
+
+**Example (self-contained):**
+```json
+{
+  "quoteResponse": { /* full quote from haiku_get_quote */ }
+}
+```
+*Requires `WALLET_PRIVATE_KEY` env var to be set.*
+
+**Example (external signatures):**
+```json
+{
+  "quoteResponse": { /* full quote */ },
+  "permit2Signature": "0x...",
+  "broadcast": false
+}
+```
+
 ## Token IID Format
 
 Tokens are identified using the IID format: `chainSlug:tokenAddress`
@@ -201,6 +262,25 @@ Examples:
 3. Handle any approvals or Permit2 signatures
 4. Call haiku_solve to get unsigned transaction
 5. Sign and broadcast
+```
+
+### Self-Contained Execution (with WALLET_PRIVATE_KEY)
+
+```
+1. Call haiku_get_quote with input tokens and target outputs
+2. Call haiku_execute with the full quote response
+   → Signs permits, calls solve, broadcasts - all in one call
+3. Done! Transaction hash returned
+```
+
+### External Wallet Integration (Coinbase, AgentKit, etc.)
+
+```
+1. Call haiku_get_quote with input tokens and target outputs
+2. Call haiku_prepare_signatures to extract EIP-712 payloads
+3. Sign the payloads via your wallet MCP (e.g., coinbase_sign_typed_data)
+4. Call haiku_solve with quoteId and signatures
+5. Broadcast via your wallet MCP (e.g., coinbase_send_transaction)
 ```
 
 ## Transaction Signing

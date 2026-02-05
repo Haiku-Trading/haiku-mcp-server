@@ -22,6 +22,17 @@ import {
   handleSolve,
   formatSolveResponse,
 } from "./tools/solve.js";
+import {
+  prepareSignaturesSchema,
+  handlePrepareSignatures,
+  formatPrepareSignaturesResponse,
+} from "./tools/prepare-signatures.js";
+import {
+  executeSchema,
+  handleExecute,
+  formatExecuteResponse,
+} from "./tools/execute.js";
+
 /**
  * Tool definitions for the MCP server
  */
@@ -138,6 +149,58 @@ const TOOLS = [
       required: ["quoteId"],
     },
   },
+  {
+    name: "haiku_prepare_signatures",
+    description:
+      "Extract EIP-712 signing payloads from a quote for external wallet signing. " +
+      "Use this when integrating with wallet MCPs (Coinbase Payments MCP, wallet-agent, etc). " +
+      "Returns standardized typed data that any wallet's signTypedData can handle. " +
+      "After signing externally, pass signatures to haiku_solve or haiku_execute.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        quoteResponse: {
+          type: "object",
+          description: "Full response from haiku_get_quote",
+        },
+      },
+      required: ["quoteResponse"],
+    },
+  },
+  {
+    name: "haiku_execute",
+    description:
+      "Execute a quote end-to-end. Two modes:\n" +
+      "1. Self-contained: Set WALLET_PRIVATE_KEY env var → signs + solves + broadcasts automatically\n" +
+      "2. External signatures: Pass pre-signed permit2Signature/userSignature from wallet MCP\n" +
+      "Set broadcast=false to get unsigned tx for external broadcasting.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        quoteResponse: {
+          type: "object",
+          description: "Full response from haiku_get_quote",
+        },
+        permit2Signature: {
+          type: "string",
+          description:
+            "Pre-signed Permit2 signature from external wallet. " +
+            "Get payload from haiku_prepare_signatures.",
+        },
+        userSignature: {
+          type: "string",
+          description:
+            "Pre-signed bridge intent signature from external wallet (cross-chain only).",
+        },
+        broadcast: {
+          type: "boolean",
+          description:
+            "If true (default), broadcasts tx. If false, returns unsigned tx.",
+        },
+      },
+      required: ["quoteResponse"],
+    },
+  },
 ];
 
 /**
@@ -213,6 +276,29 @@ export function createServer(): Server {
             content: [
               { type: "text", text: formatSolveResponse(result) },
             ],
+          };
+        }
+
+        case "haiku_prepare_signatures": {
+          const params = prepareSignaturesSchema.parse(args);
+          const result = handlePrepareSignatures(params);
+          return {
+            content: [
+              { type: "text", text: formatPrepareSignaturesResponse(result) },
+              { type: "text", text: "\n\nRaw payloads:\n" + JSON.stringify(result, null, 2) },
+            ],
+          };
+        }
+
+        case "haiku_execute": {
+          const params = executeSchema.parse(args);
+          const result = await handleExecute(haikuClient, params);
+          return {
+            content: [
+              { type: "text", text: formatExecuteResponse(result) },
+              { type: "text", text: "\n\nRaw result:\n" + JSON.stringify(result, null, 2) },
+            ],
+            isError: !result.success,
           };
         }
 
