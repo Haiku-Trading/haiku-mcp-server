@@ -1,0 +1,36 @@
+{
+  "name": "haiku-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Haiku API - enables AI agents to execute blockchain transactions",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "haiku-mcp-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "haiku",
+    "blockchain",
+    "defi",
+    "ai-agent"
+  ],
+  "author": "Haiku",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
