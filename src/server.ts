@@ -27,11 +27,6 @@ import {
   handleNaturalLanguageIntent,
   formatNaturalLanguageIntentResponse,
 } from "./tools/natural-language.js";
-import {
-  executeSwapSchema,
-  handleExecuteSwap,
-  formatSwapResponse,
-} from "./tools/swap.js";
 
 /**
  * Tool definitions for the MCP server
@@ -153,40 +148,6 @@ const TOOLS = [
       required: ["prompt", "walletAddress"],
     },
   },
-  {
-    name: "haiku_execute_swap",
-    description:
-      "Convenience tool for simple token swaps. Combines quote + solve in one call. " +
-      "For swaps requiring Permit2 signatures, returns the quote with permit2Datas " +
-      "and instructions to use haiku_solve instead. " +
-      "For simple swaps, returns the unsigned transaction ready to sign.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        inputToken: {
-          type: "string",
-          description: "Token IID to spend (chainSlug:tokenAddress)",
-        },
-        inputAmount: {
-          type: "string",
-          description: 'Amount to spend (e.g., "1.5")',
-        },
-        outputToken: {
-          type: "string",
-          description: "Token IID to receive (chainSlug:tokenAddress)",
-        },
-        slippage: {
-          type: "number",
-          description: "Max slippage as decimal. Default: 0.003",
-        },
-        receiver: {
-          type: "string",
-          description: "Receiving wallet address. Defaults to sender.",
-        },
-      },
-      required: ["inputToken", "inputAmount", "outputToken"],
-    },
-  },
 ];
 
 /**
@@ -272,17 +233,6 @@ export function createServer(): Server {
             content: [
               { type: "text", text: formatNaturalLanguageIntentResponse(result) },
               { type: "text", text: "\n\nRaw intent:\n" + JSON.stringify(result.intent, null, 2) },
-            ],
-          };
-        }
-
-        case "haiku_execute_swap": {
-          const params = executeSwapSchema.parse(args);
-          const result = await handleExecuteSwap(haikuClient, params);
-          return {
-            content: [
-              { type: "text", text: formatSwapResponse(result) },
-              { type: "text", text: "\n\nRaw response:\n" + JSON.stringify(result, null, 2) },
             ],
           };
         }

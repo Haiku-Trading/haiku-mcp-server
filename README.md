@@ -151,27 +151,6 @@ Convert natural language to a structured trading intent.
   "walletAddress": "0x..."
 }
 ```
-
-### `haiku_execute_swap`
-
-Convenience tool for simple token swaps (combines quote + solve).
-
-**Parameters:**
-- `inputToken` (required): Token IID to spend
-- `inputAmount` (required): Amount to spend
-- `outputToken` (required): Token IID to receive
-- `slippage` (optional): Max slippage (default: 0.003)
-- `receiver` (optional): Receiving wallet address
-
-**Example:**
-```json
-{
-  "inputToken": "arb:0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
-  "inputAmount": "1.0",
-  "outputToken": "arb:0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
-}
-```
-
 ## Token IID Format
 
 Tokens are identified using the IID format: `chainSlug:tokenAddress`

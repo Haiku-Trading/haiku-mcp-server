@@ -29,7 +29,9 @@ export interface Token {
  */
 export interface TokenListResponse {
   tokenCategories: string[];
-  tokens: Token[];
+  tokenList: {
+    tokens: Token[];
+  };
 }
 
 /**
@@ -178,28 +180,3 @@ export interface QuoteToolResponse extends QuoteResponse {
   requiresPermit2Signature: boolean;
   requiresBridgeSignature: boolean;
 }
-
-/**
- * High-level swap response when Permit2 is required
- */
-export interface SwapResponseWithPermit2 {
-  success: false;
-  requiresPermit2Signature: true;
-  quoteId: string;
-  permit2Datas: Permit2Data;
-  quote: QuoteResponse;
-  message: string;
-}
-
-/**
- * High-level swap response when no Permit2 needed
- */
-export interface SwapResponseWithTransaction {
-  success: true;
-  requiresPermit2Signature: false;
-  quoteId: string;
-  quote: QuoteResponse;
-  transaction: UnsignedTransaction;
-}
-
-export type SwapToolResponse = SwapResponseWithPermit2 | SwapResponseWithTransaction;

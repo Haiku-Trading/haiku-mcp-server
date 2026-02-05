@@ -34,11 +34,12 @@ export async function handleGetTokens(
   params: GetTokensParams
 ) {
   const response = await client.getTokenList(params.chainId);
+  const tokens = response.tokenList.tokens;
 
   return {
     tokenCategories: response.tokenCategories,
-    tokenCount: response.tokens.length,
-    tokens: response.tokens.map((token) => ({
+    tokenCount: tokens.length,
+    tokens: tokens.map((token) => ({
       iid: token.iid,
       symbol: token.symbol,
       name: token.name,
