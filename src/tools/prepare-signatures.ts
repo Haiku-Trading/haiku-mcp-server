@@ -1,4 +1,7 @@
 import { z } from "zod";
+import type { SigningPayload } from "../types/index.js";
+
+export type { SigningPayload };
 
 /**
  * Schema for haiku_prepare_signatures tool parameters
@@ -10,26 +13,6 @@ export const prepareSignaturesSchema = z.object({
 });
 
 type PrepareSignaturesParams = z.infer<typeof prepareSignaturesSchema>;
-
-/**
- * Standardized EIP-712 signing payload
- * Compatible with any wallet that supports signTypedData
- */
-export interface SigningPayload {
-  /** EIP-712 domain separator */
-  domain: {
-    name?: string;
-    version?: string;
-    chainId?: number;
-    verifyingContract?: string;
-  };
-  /** EIP-712 type definitions */
-  types: Record<string, Array<{ name: string; type: string }>>;
-  /** The primary type to sign */
-  primaryType: string;
-  /** The message/values to sign */
-  message: Record<string, any>;
-}
 
 export interface PrepareSignaturesResult {
   /** Quote ID to pass to haiku_solve */
@@ -64,7 +47,7 @@ export interface PrepareSignaturesResult {
  * Recursively convert BigInt-wrapped objects {hex: "0x..."} to hex strings
  * Wallets expect hex strings, not BigInt objects
  */
-function normalizeBigInts(obj: any): any {
+export function normalizeBigInts(obj: any): any {
   if (obj === null || obj === undefined) return obj;
 
   // Handle BigInt wrapper objects - convert to hex string

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { HaikuClient } from "../api/haiku-client.js";
 import type { QuoteToolResponse } from "../types/index.js";
 import { sanitizeBigInts } from "../utils/sanitize.js";
+import { normalizeBigInts } from "./prepare-signatures.js";
 
 /**
  * Schema for haiku_get_quote tool parameters
@@ -56,6 +57,27 @@ export async function handleGetQuote(
     requiresBridgeSignature,
   }) as QuoteToolResponse;
 
+  // Extract normalized signing payloads from intent for direct surfacing
+  const intent = response.intent;
+  if (intent?.permit2Datas?.[0]) {
+    const permit2Data = normalizeBigInts(intent.permit2Datas[0]);
+    sanitized.permit2SigningPayload = {
+      domain: permit2Data.domain,
+      types: permit2Data.types,
+      primaryType: permit2Data.primaryType,
+      message: permit2Data.values || permit2Data.message,
+    };
+  }
+  if (intent?.typedData) {
+    const bridgeData = normalizeBigInts(intent.typedData);
+    sanitized.bridgeSigningPayload = {
+      domain: bridgeData.domain,
+      types: bridgeData.types,
+      primaryType: bridgeData.primaryType,
+      message: bridgeData.message || bridgeData.values,
+    };
+  }
+
   return sanitized;
 }
 
@@ -99,17 +121,37 @@ export function formatQuoteResponse(response: QuoteToolResponse): string {
   if (response.requiresPermit2Signature) {
     lines.push(
       "",
-      "=== Permit2 Signature Required ===",
-      "Sign the permit2Datas EIP-712 typed data and pass to haiku_solve."
+      "=== Permit2 Signature Required ==="
     );
+    if (response.permit2SigningPayload) {
+      lines.push(
+        "Sign this EIP-712 typed data using signTypedData, then pass the resulting signature as `permit2Signature` to haiku_solve.",
+        "",
+        JSON.stringify(response.permit2SigningPayload, null, 2)
+      );
+    } else {
+      lines.push(
+        "Use haiku_prepare_signatures with the full quote response to extract the signing payload."
+      );
+    }
   }
 
   if (response.requiresBridgeSignature) {
     lines.push(
       "",
-      "=== Bridge Signature Required ===",
-      "Sign the destinationBridge EIP-712 typed data and pass to haiku_solve."
+      "=== Bridge Signature Required ==="
     );
+    if (response.bridgeSigningPayload) {
+      lines.push(
+        "Sign this EIP-712 typed data using signTypedData, then pass the resulting signature as `userSignature` to haiku_solve.",
+        "",
+        JSON.stringify(response.bridgeSigningPayload, null, 2)
+      );
+    } else {
+      lines.push(
+        "Use haiku_prepare_signatures with the full quote response to extract the signing payload."
+      );
+    }
   }
 
   return lines.join("\n");

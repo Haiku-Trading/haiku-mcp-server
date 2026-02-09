@@ -93,8 +93,8 @@ const TOOLS = [
     description:
       "Get a quote for a token swap or portfolio rebalance. " +
       "Returns expected outputs, fees, gas estimates, and any required approvals. " +
-      "If permit2Datas is returned, you must sign it before calling haiku_solve. " +
-      "Use the quoteId from this response when calling haiku_solve.",
+      "When signatures are required (Permit2 or bridge), the full EIP-712 signing payloads are included directly in the response. " +
+      "Sign the provided typed data and pass the signatures to haiku_solve.",
     inputSchema: {
       type: "object" as const,
       properties: {

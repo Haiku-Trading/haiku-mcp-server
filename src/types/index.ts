@@ -99,6 +99,26 @@ export interface QuoteRequest {
 }
 
 /**
+ * Standardized EIP-712 signing payload
+ * Compatible with any wallet that supports signTypedData
+ */
+export interface SigningPayload {
+  /** EIP-712 domain separator */
+  domain: {
+    name?: string;
+    version?: string;
+    chainId?: number;
+    verifyingContract?: string;
+  };
+  /** EIP-712 type definitions */
+  types: Record<string, Array<{ name: string; type: string }>>;
+  /** The primary type to sign */
+  primaryType: string;
+  /** The message/values to sign */
+  message: Record<string, any>;
+}
+
+/**
  * EIP-712 typed data for Permit2 signing
  */
 export interface Permit2Data {
@@ -130,6 +150,16 @@ export interface GasEstimate {
 }
 
 /**
+ * Intent object returned by the API inside a quote response
+ */
+export interface IntentResponse {
+  sourceChainId: number;
+  permit2Datas?: any[];
+  typedData?: any;
+  [key: string]: any;
+}
+
+/**
  * Response from POST /quote
  */
 export interface QuoteResponse {
@@ -151,6 +181,7 @@ export interface QuoteResponse {
   isComplexBridge: boolean;
   destinationBridge?: Permit2Data;
   gas: GasEstimate;
+  intent?: IntentResponse;
 }
 
 /**
@@ -212,4 +243,6 @@ export interface HaikuApiError {
 export interface QuoteToolResponse extends QuoteResponse {
   requiresPermit2Signature: boolean;
   requiresBridgeSignature: boolean;
+  permit2SigningPayload?: SigningPayload;
+  bridgeSigningPayload?: SigningPayload;
 }
