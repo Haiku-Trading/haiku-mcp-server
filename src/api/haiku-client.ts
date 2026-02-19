@@ -11,6 +11,7 @@ import type {
 } from "../types/index.js";
 
 const DEFAULT_BASE_URL = "https://api.haiku.trade/v1";
+const HAIKU_SOURCE_HEADER_VALUE = "haiku-mcp-server/0.0.3";
 
 /**
  * HTTP client for the Haiku API
@@ -36,6 +37,7 @@ export class HaikuClient {
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      "Haiku-Source": HAIKU_SOURCE_HEADER_VALUE,
     };
 
     // Include API key if available (provides higher rate limits)
