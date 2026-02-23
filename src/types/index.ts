@@ -128,8 +128,27 @@ export interface Permit2Data {
     verifyingContract: string;
   };
   types: Record<string, Array<{ name: string; type: string }>>;
-  primaryType: string;
-  message: Record<string, unknown>;
+  primaryType?: string;
+  values?: Record<string, unknown>;
+  message?: Record<string, unknown>;
+}
+
+/**
+ * Destination bridge data for complex cross-chain routes
+ */
+export interface DestinationBridge {
+  unsignedTypeV4Digest?: {
+    domain: Record<string, unknown>;
+    types: Record<string, Array<{ name: string; type: string }>>;
+    primaryType?: string;
+    values?: Record<string, unknown>;
+  };
+  tokenIn?: { token: Record<string, unknown>; amount: string };
+  tokenOut?: { token: Record<string, unknown>; amount: string };
+  chainId?: number;
+  executionBatchDetails?: Record<string, unknown>;
+  protocol?: string;
+  estimatedFee?: number;
 }
 
 /**
@@ -179,9 +198,8 @@ export interface QuoteResponse {
   approvals: ApprovalTransaction[];
   permit2Datas?: Permit2Data;
   isComplexBridge: boolean;
-  destinationBridge?: Permit2Data;
+  destinationBridge?: DestinationBridge;
   gas: GasEstimate;
-  intent?: IntentResponse;
 }
 
 /**

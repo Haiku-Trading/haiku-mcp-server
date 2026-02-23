@@ -84,15 +84,17 @@ export function handlePrepareSignatures(
   const { quoteResponse } = params;
 
   const quoteId = quoteResponse.quoteId;
-  const intent = quoteResponse.intent;
 
   if (!quoteId) {
     throw new Error("quoteResponse must contain quoteId");
   }
 
-  const sourceChainId = intent?.sourceChainId || 1;
-  const requiresPermit2 = intent?.permit2Datas?.length > 0;
-  const requiresBridgeSignature = !!intent?.typedData;
+  const sourceChainId =
+    quoteResponse.permit2Datas?.domain?.chainId ||
+    quoteResponse.funds?.[0]?.token?.chainId || 1;
+  const requiresPermit2 = !!quoteResponse.permit2Datas;
+  const bridgeTypedData = quoteResponse.destinationBridge?.unsignedTypeV4Digest;
+  const requiresBridgeSignature = !!bridgeTypedData;
 
   const result: PrepareSignaturesResult = {
     quoteId,
@@ -101,29 +103,29 @@ export function handlePrepareSignatures(
     requiresBridgeSignature,
     instructions: "",
     raw: {
-      permit2Datas: intent?.permit2Datas,
-      typedData: intent?.typedData,
+      permit2Datas: quoteResponse.permit2Datas,
+      typedData: bridgeTypedData,
     },
   };
 
   // Extract Permit2 signing payload
   if (requiresPermit2) {
-    const permit2Data = normalizeBigInts(intent.permit2Datas[0]);
+    const permit2Data = normalizeBigInts(quoteResponse.permit2Datas);
     result.permit2 = {
       domain: permit2Data.domain,
       types: permit2Data.types,
-      primaryType: permit2Data.primaryType,
+      primaryType: permit2Data.primaryType || (permit2Data.types?.PermitBatch ? "PermitBatch" : "PermitSingle"),
       message: permit2Data.values || permit2Data.message,
     };
   }
 
   // Extract bridge intent signing payload
   if (requiresBridgeSignature) {
-    const bridgeData = normalizeBigInts(intent.typedData);
+    const bridgeData = normalizeBigInts(bridgeTypedData);
     result.bridgeIntent = {
       domain: bridgeData.domain,
       types: bridgeData.types,
-      primaryType: bridgeData.primaryType,
+      primaryType: bridgeData.primaryType || Object.keys(bridgeData.types)[0],
       message: bridgeData.message || bridgeData.values,
     };
   }

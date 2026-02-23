@@ -301,7 +301,6 @@ export async function handleExecute(
   }
 
   const quoteId = quoteResponse.quoteId;
-  const intent = quoteResponse.intent;
 
   if (!quoteId) {
     return {
@@ -311,7 +310,9 @@ export async function handleExecute(
     };
   }
 
-  const sourceChainId = intent?.sourceChainId || 42161;
+  const sourceChainId =
+    quoteResponse.permit2Datas?.domain?.chainId ||
+    quoteResponse.funds?.[0]?.token?.chainId || 42161;
   const chain = CHAIN_MAP[sourceChainId];
   if (!chain) {
     return {
@@ -343,23 +344,24 @@ export async function handleExecute(
       });
 
       // Sign Permit2 if required
-      if (intent?.permit2Datas?.length > 0) {
-        const permit2Data = fixBigInts(intent.permit2Datas[0]);
+      if (quoteResponse.permit2Datas) {
+        const permit2Data = fixBigInts(quoteResponse.permit2Datas);
         permit2Signature = await walletClient.signTypedData({
           domain: permit2Data.domain,
           types: permit2Data.types,
-          primaryType: permit2Data.primaryType,
+          primaryType: permit2Data.primaryType || (permit2Data.types?.PermitBatch ? "PermitBatch" : "PermitSingle"),
           message: permit2Data.values,
         });
       }
 
       // Sign bridge intent if required
-      if (intent?.typedData) {
-        const bridgeData = fixBigInts(intent.typedData);
+      const bridgeTypedData = quoteResponse.destinationBridge?.unsignedTypeV4Digest;
+      if (bridgeTypedData) {
+        const bridgeData = fixBigInts(bridgeTypedData);
         userSignature = await walletClient.signTypedData({
           domain: bridgeData.domain,
           types: bridgeData.types,
-          primaryType: bridgeData.primaryType,
+          primaryType: bridgeData.primaryType || Object.keys(bridgeData.types)[0],
           message: bridgeData.message || bridgeData.values,
         });
       }

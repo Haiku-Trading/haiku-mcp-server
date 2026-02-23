@@ -57,23 +57,24 @@ export async function handleGetQuote(
     requiresBridgeSignature,
   }) as QuoteToolResponse;
 
-  // Extract normalized signing payloads from intent for direct surfacing
-  const intent = response.intent;
-  if (intent?.permit2Datas?.[0]) {
-    const permit2Data = normalizeBigInts(intent.permit2Datas[0]);
+  // Extract normalized signing payloads for direct surfacing
+  if (response.permit2Datas) {
+    const permit2Data = normalizeBigInts(response.permit2Datas);
     sanitized.permit2SigningPayload = {
       domain: permit2Data.domain,
       types: permit2Data.types,
-      primaryType: permit2Data.primaryType,
+      primaryType: permit2Data.primaryType || (permit2Data.types?.PermitBatch ? "PermitBatch" : "PermitSingle"),
       message: permit2Data.values || permit2Data.message,
     };
   }
-  if (intent?.typedData) {
-    const bridgeData = normalizeBigInts(intent.typedData);
+
+  const bridgeTypedData = response.destinationBridge?.unsignedTypeV4Digest;
+  if (bridgeTypedData) {
+    const bridgeData = normalizeBigInts(bridgeTypedData);
     sanitized.bridgeSigningPayload = {
       domain: bridgeData.domain,
       types: bridgeData.types,
-      primaryType: bridgeData.primaryType,
+      primaryType: bridgeData.primaryType || Object.keys(bridgeData.types)[0],
       message: bridgeData.message || bridgeData.values,
     };
   }
