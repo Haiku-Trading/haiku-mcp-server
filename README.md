@@ -13,6 +13,8 @@ An MCP (Model Context Protocol) server that enables AI agents to execute blockch
 - **Transaction Building**: Convert quotes to unsigned EVM transactions
 - **Wallet Integration**: Extract EIP-712 payloads for external wallet signing (Coinbase, AgentKit, Safe, etc.)
 - **Self-Contained Execution**: Optional end-to-end execution with WALLET_PRIVATE_KEY env var
+- **Yield Discovery**: Find the highest-yielding DeFi opportunities across protocols and chains, filtered by APY, TVL, and category
+- **Portfolio Analysis**: Analyze a wallet's holdings and surface context-specific yield opportunities based on what it actually holds
 
 ## Installation
 
@@ -176,6 +178,51 @@ Use this when integrating with wallet MCPs (Coinbase Payments MCP, wallet-agent,
 }
 ```
 
+### `haiku_discover_yields`
+
+Discover yield-bearing opportunities across DeFi protocols, ranked by APY or TVL.
+
+Use this to answer questions like "best lending yields on Arbitrum", "highest APY vaults
+with at least $1M TVL", or "what can I do with USDC on Base". The `iid` field in results
+can be used directly as a `targetWeight` key in `haiku_get_quote`.
+
+**Parameters:**
+- `chainId` (optional): Filter by chain ID (e.g., 42161 for Arbitrum)
+- `category` (optional): `lending` (Aave collateral), `vault` (Yearn/Morpho), `lp` (Balancer/Uniswap), `all` (default)
+- `minApy` (optional): Minimum APY as a percentage (e.g., `5` means ≥5% APY)
+- `minTvl` (optional): Minimum TVL in USD (e.g., `1000000` means ≥$1M). Filters to established mainstream vaults.
+- `sortBy` (optional): `apy` (default) or `tvl`, descending
+- `limit` (optional): Max results (default 20)
+
+**Example:**
+```json
+{
+  "chainId": 42161,
+  "category": "lending",
+  "minTvl": 1000000,
+  "sortBy": "apy",
+  "limit": 10
+}
+```
+
+### `haiku_analyze_portfolio`
+
+Analyze a wallet's DeFi portfolio and surface relevant yield opportunities.
+
+Returns current positions enriched with available APY options, collateral health factors,
+and context-specific opportunities based on what the wallet actually holds. Pair with
+`haiku_discover_yields` for broader market context, then use `haiku_get_quote` to execute.
+
+**Parameters:**
+- `walletAddress` (required): Wallet address (0x...) to analyze
+
+**Example:**
+```json
+{
+  "walletAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+}
+```
+
 ### `haiku_execute`
 
 Execute a quote end-to-end with flexible signing options.
@@ -271,6 +318,26 @@ Examples:
 2. Call haiku_execute with the full quote response
    → Signs permits, calls solve, broadcasts - all in one call
 3. Done! Transaction hash returned
+```
+
+### Yield Discovery
+
+```
+1. Call haiku_discover_yields with category/chain/minTvl filters to find opportunities
+2. Pick a target vault/pool by its iid
+3. Call haiku_get_balances to confirm available input tokens
+4. Call haiku_get_quote with the chosen iid as a targetWeight
+5. Execute via haiku_solve or haiku_execute
+```
+
+### Portfolio Analysis & Optimization
+
+```
+1. Call haiku_analyze_portfolio with a wallet address
+2. Review current positions and suggested opportunities
+3. Optionally call haiku_discover_yields for broader market context
+4. Call haiku_get_quote to rebalance into higher-yielding positions
+5. Execute via haiku_solve or haiku_execute
 ```
 
 ### External Wallet Integration (Coinbase, AgentKit, etc.)
