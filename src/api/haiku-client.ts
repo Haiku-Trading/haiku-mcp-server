@@ -78,6 +78,7 @@ export class HaikuClient {
     chainId?: number | number[];
     category?: string | string[];
     protocol?: string | string[];
+    symbol?: string | string[];
     sortBy?: "apy" | "tvl";
     minApy?: number;
     maxApy?: number;
@@ -102,6 +103,12 @@ export class HaikuClient {
         ? params.protocol.join(",")
         : params.protocol;
       query.set("protocol", protos);
+    }
+    if (params?.symbol !== undefined) {
+      const syms = Array.isArray(params.symbol)
+        ? params.symbol.join(",")
+        : params.symbol;
+      query.set("symbol", syms);
     }
     if (params?.sortBy) query.set("sortBy", params.sortBy);
     if (params?.minApy !== undefined) query.set("minApy", String(params.minApy));

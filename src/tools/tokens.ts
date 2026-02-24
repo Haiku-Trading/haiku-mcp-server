@@ -42,6 +42,14 @@ export const getTokensSchema = z.object({
         "comma-separated list (e.g. 'MORPHO,CURVE') for multi-protocol filtering. " +
         "Common values: AAVE_V3, AAVE_V2, MORPHO, YEARN, BALANCER_V2, UNISWAP_V3, COMPOUND, EULER, PENDLE, CURVE."
     ),
+  symbol: z
+    .string()
+    .optional()
+    .describe(
+      "Search by symbol or name (case-insensitive substring match). " +
+        "Single value (e.g. 'USDC') or comma-separated list (e.g. 'USDC,USDT'). " +
+        "Matches any token whose symbol or name contains the search term."
+    ),
 });
 
 export type GetTokensParams = z.infer<typeof getTokensSchema>;
@@ -67,6 +75,7 @@ export async function handleGetTokens(
   const response = await client.getTokenList({
     ...(params.chainId !== undefined && { chainId: params.chainId }),
     ...(params.protocol !== undefined && { protocol: params.protocol }),
+    ...(params.symbol !== undefined && { symbol: params.symbol }),
   });
   const { tokenList } = response;
 
