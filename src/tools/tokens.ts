@@ -56,7 +56,7 @@ export async function handleGetTokens(
   client: HaikuClient,
   params: GetTokensParams
 ) {
-  const response = await client.getTokenList(params.chainId);
+  const response = await client.getTokenList(params.chainId !== undefined ? { chainId: params.chainId } : undefined);
   const { tokenList } = response;
 
   // Map category parameter to token list array key

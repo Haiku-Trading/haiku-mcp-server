@@ -32,6 +32,14 @@ import {
   handleExecute,
   formatExecuteResponse,
 } from "./tools/execute.js";
+import {
+  discoverYieldsSchema,
+  handleDiscoverYields,
+} from "./tools/yields.js";
+import {
+  analyzePortfolioSchema,
+  handleAnalyzePortfolio,
+} from "./tools/portfolio-analysis.js";
 
 /**
  * Tool definitions for the MCP server
@@ -168,6 +176,69 @@ const TOOLS = [
     },
   },
   {
+    name: "haiku_discover_yields",
+    description:
+      "Discover yield-bearing opportunities across DeFi protocols. " +
+      "Returns APY, TVL, risk parameters, and token IIDs ready for haiku_get_quote. " +
+      "Use this to answer questions like 'best lending yields on Arbitrum', " +
+      "'highest APY vaults with at least $1M TVL', or 'what can I do with USDC on BNB Chain'. " +
+      "The iid field in results can be used directly as a targetWeight key in haiku_get_quote.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        chainId: {
+          type: "number",
+          description:
+            "Filter by chain ID. Common chains: 42161 (Arbitrum), 8453 (Base), 1 (Ethereum), 137 (Polygon), 10 (Optimism), 56 (BNB Chain)",
+        },
+        category: {
+          type: "string",
+          enum: ["lending", "vault", "lp", "all"],
+          description:
+            "lending=Aave collateral tokens, vault=Yearn/Morpho vaults, lp=Balancer/Uniswap LP, all=every yield-bearing category (default: all)",
+        },
+        minApy: {
+          type: "number",
+          description: "Minimum APY filter as a percentage, e.g. 5 means ≥5% APY",
+        },
+        minTvl: {
+          type: "number",
+          description:
+            "Minimum TVL filter in USD, e.g. 1000000 means ≥$1M TVL. " +
+            "Use this to filter to established mainstream vaults and exclude low-liquidity pools.",
+        },
+        sortBy: {
+          type: "string",
+          enum: ["apy", "tvl"],
+          description: "Sort by APY (default) or TVL, descending",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results (default 20)",
+        },
+      },
+    },
+  },
+  {
+    name: "haiku_analyze_portfolio",
+    description:
+      "Analyze a wallet's DeFi portfolio and surface relevant yield opportunities. " +
+      "Returns current positions enriched with available APY options, collateral health factors, " +
+      "and context-specific opportunities based on what the wallet actually holds. " +
+      "Use this when a user asks what they should do with their portfolio or wants yield optimization advice. " +
+      "Pair the output with haiku_discover_yields for broader market context, then use haiku_get_quote to execute.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        walletAddress: {
+          type: "string",
+          description: "Wallet address (0x...) to analyze",
+        },
+      },
+      required: ["walletAddress"],
+    },
+  },
+  {
     name: "haiku_execute",
     description:
       "Execute a quote end-to-end. Two modes:\n" +
@@ -287,6 +358,22 @@ export function createServer(): Server {
               { type: "text", text: formatPrepareSignaturesResponse(result) },
               { type: "text", text: "\n\nRaw payloads:\n" + JSON.stringify(result, null, 2) },
             ],
+          };
+        }
+
+        case "haiku_discover_yields": {
+          const params = discoverYieldsSchema.parse(args);
+          const result = await handleDiscoverYields(haikuClient, params);
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          };
+        }
+
+        case "haiku_analyze_portfolio": {
+          const params = analyzePortfolioSchema.parse(args);
+          const result = await handleAnalyzePortfolio(haikuClient, params);
+          return {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
         }
 

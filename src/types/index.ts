@@ -35,10 +35,10 @@ export interface Token {
   // Debt-specific (Aave)
   reserve_factor?: number;     // Reserve factor (e.g., 0.25)
 
-  // Yield fields
-  apy?: string;                // APY as string (collateral/debt)
-  minApy?: number;             // Min APY as number (vaults, LP)
-  maxApy?: number;             // Max APY as number (vaults, LP)
+  // Yield fields — all APY values are percentage numbers (e.g. 5.64 means 5.64% APY)
+  apy?: number;                // APY as percentage number (collateral/debt)
+  minApy?: number;             // Min APY as percentage number (vaults, LP)
+  maxApy?: number;             // Max APY as percentage number (vaults, LP)
 
   // LP-specific
   weights?: number[];          // Pool weights (weighted LP)

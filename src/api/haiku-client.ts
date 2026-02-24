@@ -71,12 +71,38 @@ export class HaikuClient {
   }
 
   /**
-   * Get list of supported tokens
-   * @param chainId - Optional chain ID to filter tokens
+   * Get list of supported tokens with optional filtering, sorting, and limiting.
+   * Multi-value params (chainId, category) can be arrays — they are comma-joined.
    */
-  async getTokenList(chainId?: number): Promise<TokenListResponse> {
-    const params = chainId ? `?chainId=${chainId}` : "";
-    return this.request<TokenListResponse>(`/tokenList${params}`);
+  async getTokenList(params?: {
+    chainId?: number | number[];
+    category?: string | string[];
+    sortBy?: "apy" | "tvl";
+    minApy?: number;
+    maxApy?: number;
+    minTvl?: number;
+    limit?: number;
+  }): Promise<TokenListResponse> {
+    const query = new URLSearchParams();
+    if (params?.chainId !== undefined) {
+      const ids = Array.isArray(params.chainId)
+        ? params.chainId.join(",")
+        : String(params.chainId);
+      query.set("chainId", ids);
+    }
+    if (params?.category !== undefined) {
+      const cats = Array.isArray(params.category)
+        ? params.category.join(",")
+        : params.category;
+      query.set("category", cats);
+    }
+    if (params?.sortBy) query.set("sortBy", params.sortBy);
+    if (params?.minApy !== undefined) query.set("minApy", String(params.minApy));
+    if (params?.maxApy !== undefined) query.set("maxApy", String(params.maxApy));
+    if (params?.minTvl !== undefined) query.set("minTvl", String(params.minTvl));
+    if (params?.limit !== undefined) query.set("limit", String(params.limit));
+    const qs = query.toString();
+    return this.request<TokenListResponse>(`/tokenList${qs ? `?${qs}` : ""}`);
   }
 
   /**
