@@ -72,11 +72,12 @@ export class HaikuClient {
 
   /**
    * Get list of supported tokens with optional filtering, sorting, and limiting.
-   * Multi-value params (chainId, category) can be arrays — they are comma-joined.
+   * Multi-value params (chainId, category, protocol) can be arrays — they are comma-joined.
    */
   async getTokenList(params?: {
     chainId?: number | number[];
     category?: string | string[];
+    protocol?: string | string[];
     sortBy?: "apy" | "tvl";
     minApy?: number;
     maxApy?: number;
@@ -95,6 +96,12 @@ export class HaikuClient {
         ? params.category.join(",")
         : params.category;
       query.set("category", cats);
+    }
+    if (params?.protocol !== undefined) {
+      const protos = Array.isArray(params.protocol)
+        ? params.protocol.join(",")
+        : params.protocol;
+      query.set("protocol", protos);
     }
     if (params?.sortBy) query.set("sortBy", params.sortBy);
     if (params?.minApy !== undefined) query.set("minApy", String(params.minApy));

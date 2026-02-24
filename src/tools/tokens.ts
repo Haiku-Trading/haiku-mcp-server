@@ -34,6 +34,14 @@ export const getTokensSchema = z.object({
         "'weightedLiquidity' (Balancer LP), 'concentratedLiquidity' (Uniswap V3 LP). " +
         "Omit to return all categories."
     ),
+  protocol: z
+    .string()
+    .optional()
+    .describe(
+      "Filter by protocol name (case-insensitive). Use a single value (e.g. 'AAVE_V3') or " +
+        "comma-separated list (e.g. 'MORPHO,CURVE') for multi-protocol filtering. " +
+        "Common values: AAVE_V3, AAVE_V2, MORPHO, YEARN, BALANCER_V2, UNISWAP_V3, COMPOUND, EULER, PENDLE, CURVE."
+    ),
 });
 
 export type GetTokensParams = z.infer<typeof getTokensSchema>;
@@ -56,7 +64,10 @@ export async function handleGetTokens(
   client: HaikuClient,
   params: GetTokensParams
 ) {
-  const response = await client.getTokenList(params.chainId !== undefined ? { chainId: params.chainId } : undefined);
+  const response = await client.getTokenList({
+    ...(params.chainId !== undefined && { chainId: params.chainId }),
+    ...(params.protocol !== undefined && { protocol: params.protocol }),
+  });
   const { tokenList } = response;
 
   // Map category parameter to token list array key

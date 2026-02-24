@@ -24,6 +24,14 @@ export const discoverYieldsSchema = z.object({
     .number()
     .optional()
     .describe("Minimum TVL filter in USD, e.g. 1000000 means ≥$1M TVL. Useful for filtering to established mainstream vaults."),
+  protocol: z
+    .string()
+    .optional()
+    .describe(
+      "Filter by protocol name (case-insensitive). Single value (e.g. 'MORPHO') or " +
+        "comma-separated list (e.g. 'AAVE_V3,MORPHO'). " +
+        "Common values: AAVE_V3, AAVE_V2, MORPHO, YEARN, BALANCER_V2, UNISWAP_V3, COMPOUND, EULER, PENDLE, CURVE."
+    ),
   sortBy: z
     .enum(["apy", "tvl"])
     .optional()
@@ -159,6 +167,7 @@ export async function handleDiscoverYields(
   const response = await client.getTokenList({
     chainId: params.chainId,
     category: backendCategories,
+    protocol: params.protocol,
     sortBy: params.sortBy ?? "apy",
     minApy: params.minApy,
     minTvl: params.minTvl,
@@ -233,6 +242,7 @@ export async function handleDiscoverYields(
     filters: {
       chainId: params.chainId,
       category,
+      protocol: params.protocol,
       minApy: params.minApy,
     },
     yields: entries,
