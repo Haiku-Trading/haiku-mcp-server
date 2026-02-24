@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   createWalletClient,
+  createPublicClient,
   http,
   type Chain,
   defineChain,
@@ -436,10 +437,43 @@ export async function handleExecute(
     }
 
     // Broadcast transaction
+    let gasParams: {
+      gas?: bigint;
+      maxFeePerGas?: bigint;
+      maxPriorityFeePerGas?: bigint;
+    } = {};
+
+    try {
+      const publicClient = createPublicClient({
+        chain,
+        transport: http(getRpcUrl(sourceChainId)),
+      });
+
+      const [estimatedGas, feeData] = await Promise.all([
+        publicClient.estimateGas({
+          account: walletClient.account,
+          to: transaction.to,
+          data: transaction.data,
+          value: transaction.value,
+        }),
+        publicClient.estimateFeesPerGas(),
+      ]);
+
+      // 20% buffer: (estimatedGas * 6) / 5
+      gasParams = {
+        gas: (estimatedGas * 6n) / 5n,
+        maxFeePerGas: feeData.maxFeePerGas,
+        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
+      };
+    } catch {
+      // Estimation failed — fall back to viem/RPC defaults (current behaviour)
+    }
+
     const txHash = await walletClient.sendTransaction({
       to: transaction.to,
       data: transaction.data,
       value: transaction.value,
+      ...gasParams,
     });
 
     const explorerUrl = getExplorerUrl(sourceChainId, txHash);
