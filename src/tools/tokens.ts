@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { privateKeyToAccount } from "viem/accounts";
 import type { HaikuClient } from "../api/haiku-client.js";
 
 /**
@@ -69,7 +70,8 @@ export type GetTokensParams = z.infer<typeof getTokensSchema>;
 export const getBalancesSchema = z.object({
   walletAddress: z
     .string()
-    .describe("Wallet address (0x...) or ENS name to get token balances for"),
+    .optional()
+    .describe("Wallet address (0x...) or ENS name. If omitted, derived from WALLET_PRIVATE_KEY env var."),
 });
 
 export type GetBalancesParams = z.infer<typeof getBalancesSchema>;
@@ -159,7 +161,22 @@ export async function handleGetBalances(
   client: HaikuClient,
   params: GetBalancesParams
 ) {
-  const response = await client.getTokenBalances(params.walletAddress);
+  let walletAddress = params.walletAddress;
+
+  if (!walletAddress) {
+    const privateKey = process.env.WALLET_PRIVATE_KEY;
+    if (!privateKey) {
+      throw new Error(
+        "walletAddress is required. Either pass it explicitly or set WALLET_PRIVATE_KEY env var."
+      );
+    }
+    const normalizedKey = privateKey.startsWith("0x")
+      ? (privateKey as `0x${string}`)
+      : (`0x${privateKey}` as `0x${string}`);
+    walletAddress = privateKeyToAccount(normalizedKey).address;
+  }
+
+  const response = await client.getTokenBalances(walletAddress);
 
   // Calculate total USD value
   let totalValueUSD = 0;
@@ -190,7 +207,7 @@ export async function handleGetBalances(
   );
 
   return {
-    walletAddress: params.walletAddress,
+    walletAddress: walletAddress,
     totalValueUSD: totalValueUSD.toFixed(2),
     balances: balancesWithUSD,
     categorizedPositions: response.categorised_wallet_positions,

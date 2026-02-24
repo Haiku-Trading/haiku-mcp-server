@@ -84,16 +84,17 @@ const TOOLS = [
     name: "haiku_get_balances",
     description:
       "Get token balances for a wallet address across all supported chains. " +
-      "Returns balances, USD prices, total portfolio value, and categorized positions (tokens, collateral, debt, vaults).",
+      "Returns balances, USD prices, total portfolio value, and categorized positions (tokens, collateral, debt, vaults). " +
+      "walletAddress is optional when WALLET_PRIVATE_KEY is set in the environment.",
     inputSchema: {
       type: "object" as const,
       properties: {
         walletAddress: {
           type: "string",
-          description: "Wallet address (0x...) or ENS name",
+          description: "Wallet address (0x...) or ENS name. Omit to auto-derive from WALLET_PRIVATE_KEY.",
         },
       },
-      required: ["walletAddress"],
+      required: [],
     },
   },
   {
