@@ -50,6 +50,15 @@ export const getTokensSchema = z.object({
         "Single value (e.g. 'USDC') or comma-separated list (e.g. 'USDC,USDT'). " +
         "Matches any token whose symbol or name contains the search term."
     ),
+  address: z
+    .string()
+    .optional()
+    .describe(
+      "Filter by contract address (case-insensitive exact match). " +
+        "Single value (e.g. '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48') or " +
+        "comma-separated list for multiple addresses. " +
+        "Use this when you already know the exact token contract address."
+    ),
 });
 
 export type GetTokensParams = z.infer<typeof getTokensSchema>;
@@ -76,6 +85,7 @@ export async function handleGetTokens(
     ...(params.chainId !== undefined && { chainId: params.chainId }),
     ...(params.protocol !== undefined && { protocol: params.protocol }),
     ...(params.symbol !== undefined && { symbol: params.symbol }),
+    ...(params.address !== undefined && { address: params.address }),
   });
   const { tokenList } = response;
 
