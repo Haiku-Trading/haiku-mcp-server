@@ -108,7 +108,7 @@ export function formatQuoteResponse(response: QuoteToolResponse): string {
 
   lines.push(
     "",
-    `Gas Estimate: ${response.gas.amount} (~$${response.gas.amountUSD})`
+    `Gas Estimate: ${response.gas.amount} (~$${response.gas.usd})`
   );
 
   if (response.approvals.length > 0) {

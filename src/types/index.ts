@@ -163,9 +163,10 @@ export interface ApprovalTransaction {
 /**
  * Gas estimation
  */
+// API returns: gas: { amount: 1082768, usd: "6.417913431017e-8" }
 export interface GasEstimate {
-  amount: string;
-  amountUSD: string;
+  amount: string | number;
+  usd: string;
 }
 
 /**

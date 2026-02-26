@@ -20,10 +20,25 @@ import type { HaikuClient } from "../api/haiku-client.js";
  * Note: Private key is ONLY read from env var for security (not accepted as parameter)
  */
 export const executeSchema = z.object({
-  quoteResponse: z
-    .any()
+  quoteId: z
+    .string()
+    .describe("Quote ID from haiku_get_quote. Required to call /solve."),
+
+  // For self-contained signing (WALLET_PRIVATE_KEY mode only)
+  permit2SigningPayload: z
+    .record(z.string(), z.unknown())
+    .optional()
     .describe(
-      "The full quote response from haiku_get_quote. Must include quoteId and intent."
+      "permit2SigningPayload from haiku_get_quote. Required for self-contained signing " +
+        "when WALLET_PRIVATE_KEY is set and the swap needs Permit2 approval."
+    ),
+
+  bridgeSigningPayload: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe(
+      "bridgeSigningPayload from haiku_get_quote. Required for self-contained signing " +
+        "of cross-chain swaps with complex bridges."
     ),
 
   // External signatures (from wallet MCP)
@@ -40,15 +55,6 @@ export const executeSchema = z.object({
     .describe(
       "Pre-signed bridge intent signature from external wallet. " +
         "Required for cross-chain swaps with complex bridges."
-    ),
-
-  // Transaction sender (required for external signature mode without env key)
-  senderAddress: z
-    .string()
-    .optional()
-    .describe(
-      "Sender wallet address (0x...). Required when using external signatures " +
-        "without WALLET_PRIVATE_KEY env var, so the tool knows which address to broadcast from."
     ),
 
   broadcast: z
@@ -283,7 +289,7 @@ export async function handleExecute(
   client: HaikuClient,
   params: ExecuteParams
 ): Promise<ExecuteResult> {
-  const { quoteResponse, broadcast = true } = params;
+  const { quoteId, permit2SigningPayload, bridgeSigningPayload, broadcast = true } = params;
 
   // Private key ONLY from env var (security: never accept as parameter)
   const hasPrivateKey = !!process.env.WALLET_PRIVATE_KEY;
@@ -301,19 +307,8 @@ export async function handleExecute(
     };
   }
 
-  const quoteId = quoteResponse.quoteId;
-
-  if (!quoteId) {
-    return {
-      success: false,
-      mode: "prepare-only",
-      error: "quoteResponse must contain quoteId",
-    };
-  }
-
   const sourceChainId =
-    quoteResponse.permit2Datas?.domain?.chainId ||
-    quoteResponse.funds?.[0]?.token?.chainId || 42161;
+    (permit2SigningPayload as any)?.domain?.chainId || 42161;
   const chain = CHAIN_MAP[sourceChainId];
   if (!chain) {
     return {
@@ -345,25 +340,24 @@ export async function handleExecute(
       });
 
       // Sign Permit2 if required
-      if (quoteResponse.permit2Datas) {
-        const permit2Data = fixBigInts(quoteResponse.permit2Datas);
+      if (permit2SigningPayload) {
+        const p2 = fixBigInts(permit2SigningPayload);
         permit2Signature = await walletClient.signTypedData({
-          domain: permit2Data.domain,
-          types: permit2Data.types,
-          primaryType: permit2Data.primaryType || (permit2Data.types?.PermitBatch ? "PermitBatch" : "PermitSingle"),
-          message: permit2Data.values,
+          domain: p2.domain,
+          types: p2.types,
+          primaryType: p2.primaryType,
+          message: p2.message,
         });
       }
 
       // Sign bridge intent if required
-      const bridgeTypedData = quoteResponse.destinationBridge?.unsignedTypeV4Digest;
-      if (bridgeTypedData) {
-        const bridgeData = fixBigInts(bridgeTypedData);
+      if (bridgeSigningPayload) {
+        const bridge = fixBigInts(bridgeSigningPayload);
         userSignature = await walletClient.signTypedData({
-          domain: bridgeData.domain,
-          types: bridgeData.types,
-          primaryType: bridgeData.primaryType || Object.keys(bridgeData.types)[0],
-          message: bridgeData.message || bridgeData.values,
+          domain: bridge.domain,
+          types: bridge.types,
+          primaryType: bridge.primaryType,
+          message: bridge.message,
         });
       }
     }
