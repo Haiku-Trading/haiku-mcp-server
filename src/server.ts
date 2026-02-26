@@ -117,7 +117,7 @@ const TOOLS = [
             'gnosis=Gnosis(100), sonic=Sonic(146), worldchain=World Chain(480), ' +
             'scroll=Scroll(534352), lisk=Lisk(1135), sei=Sei(1329), bera=Berachain(80094), ' +
             'bob=BOB(60808), hype=Hyperliquid(999), katana=Katana(747474), monad=Monad(143), ' +
-            'plasma=Plasma(9745), uni=Unichain(130), ape=ApeChain(33139). ' +
+            'plasma=Plasma(9745), uni=Unichain(130), ape=ApeChain(33139), megaeth=MegaETH(4326). ' +
             'Example: { "arb:0x82aF49447D8a07e3bd95BD0d56f35241523fBab1": "1.5" }',
         },
         targetWeights: {

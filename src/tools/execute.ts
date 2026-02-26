@@ -150,6 +150,14 @@ const apeChain = defineChain({
   blockExplorers: { default: { name: "ApeScan", url: "https://apescan.io" } },
 });
 
+const megaeth = defineChain({
+  id: 4326,
+  name: "MegaETH",
+  nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+  rpcUrls: { default: { http: ["https://mainnet.megaeth.com/rpc"] } },
+  blockExplorers: { default: { name: "MegaETH Explorer", url: "https://mega.etherscan.io" } },
+});
+
 /**
  * Chain ID to viem chain mapping - all 21 supported chains
  */
@@ -177,6 +185,7 @@ const CHAIN_MAP: Record<number, Chain> = {
   9745: plasma,
   130: unichain,
   33139: apeChain,
+  4326: megaeth,
 };
 
 /**
@@ -211,6 +220,7 @@ function getRpcUrl(chainId: number): string {
     9745: "https://rpc.plasma.network",
     130: "https://rpc.unichain.org",
     33139: "https://rpc.apechain.com",
+    4326: "https://mainnet.megaeth.com/rpc",
   };
 
   return publicRpcs[chainId] || `https://rpc.ankr.com/${chainId}`;
@@ -263,6 +273,7 @@ function getExplorerUrl(chainId: number, txHash: string): string {
     9745: "https://explorer.plasma.network",
     130: "https://explorer.unichain.org",
     33139: "https://apescan.io",
+    4326: "https://mega.etherscan.io",
   };
 
   const base = explorers[chainId] || `https://blockscan.com`;

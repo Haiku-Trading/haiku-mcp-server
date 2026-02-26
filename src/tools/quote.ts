@@ -9,7 +9,7 @@ const SLUG_TO_CHAIN_ID: Record<string, number> = {
   opt: 10,    bsc: 56,     avax: 43114, gnosis: 100, sonic: 146,
   worldchain: 480, scroll: 534352, lisk: 1135, sei: 1329,
   bob: 60808, hype: 999,   katana: 747474, monad: 143,
-  plasma: 9745, uni: 130,  ape: 33139,
+  plasma: 9745, uni: 130,  ape: 33139, megaeth: 4326,
 };
 
 /**
