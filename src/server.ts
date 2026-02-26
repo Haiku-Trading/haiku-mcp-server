@@ -271,6 +271,15 @@ const TOOLS = [
           type: "string",
           description: "Pre-signed bridge intent signature (external wallet mode)",
         },
+        approvals: {
+          type: "array",
+          items: { type: "object" },
+          description: "approvals from haiku_get_quote — sent automatically in self-contained mode",
+        },
+        sourceChainId: {
+          type: "number",
+          description: "sourceChainId from haiku_get_quote response",
+        },
         broadcast: {
           type: "boolean",
           description: "If true (default), broadcasts tx. If false, returns unsigned tx.",
@@ -342,7 +351,7 @@ export function createServer(): Server {
           return {
             content: [
               { type: "text", text: formatQuoteResponse(result) },
-              { type: "text", text: "\n\n---\nPass quoteId (and permit2SigningPayload/bridgeSigningPayload if WALLET_PRIVATE_KEY signing is needed) to haiku_execute:\n" + JSON.stringify(result, null, 2) },
+              { type: "text", text: "\n\n---\nPass to haiku_execute: quoteId (required); sourceChainId (always); permit2SigningPayload + bridgeSigningPayload if present (for WALLET_PRIVATE_KEY signing); approvals if present (sent automatically in self-contained mode):\n" + JSON.stringify(result, null, 2) },
             ],
           };
         }

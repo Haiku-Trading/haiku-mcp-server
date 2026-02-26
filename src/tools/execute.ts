@@ -57,6 +57,21 @@ export const executeSchema = z.object({
         "Required for cross-chain swaps with complex bridges."
     ),
 
+  approvals: z
+    .array(z.record(z.string(), z.unknown()))
+    .optional()
+    .describe(
+      "approvals array from haiku_get_quote. In self-contained mode (WALLET_PRIVATE_KEY set), " +
+      "these ERC-20 approval transactions are sent and confirmed before the main swap."
+    ),
+
+  sourceChainId: z
+    .number()
+    .optional()
+    .describe(
+      "sourceChainId from haiku_get_quote response. Used as chain fallback when permit2SigningPayload is absent."
+    ),
+
   broadcast: z
     .boolean()
     .optional()
@@ -289,7 +304,7 @@ export async function handleExecute(
   client: HaikuClient,
   params: ExecuteParams
 ): Promise<ExecuteResult> {
-  const { quoteId, permit2SigningPayload, bridgeSigningPayload, broadcast = true } = params;
+  const { quoteId, permit2SigningPayload, bridgeSigningPayload, approvals, broadcast = true } = params;
 
   // Private key ONLY from env var (security: never accept as parameter)
   const hasPrivateKey = !!process.env.WALLET_PRIVATE_KEY;
@@ -308,7 +323,9 @@ export async function handleExecute(
   }
 
   const sourceChainId =
-    (permit2SigningPayload as any)?.domain?.chainId || 42161;
+    (permit2SigningPayload as any)?.domain?.chainId ||
+    params.sourceChainId ||
+    42161;
   const chain = CHAIN_MAP[sourceChainId];
   if (!chain) {
     return {
@@ -338,6 +355,23 @@ export async function handleExecute(
         chain,
         transport: http(getRpcUrl(sourceChainId)),
       });
+
+      // Send ERC20 approval transactions first (must confirm before swap)
+      if (approvals && approvals.length > 0) {
+        const approvalPublicClient = createPublicClient({
+          chain,
+          transport: http(getRpcUrl(sourceChainId)),
+        });
+        for (const approval of approvals) {
+          const approvalTx = fixBigInts(approval) as any;
+          const approvalHash = await walletClient.sendTransaction({
+            to: approvalTx.to as `0x${string}`,
+            data: approvalTx.data as `0x${string}`,
+            value: BigInt(approvalTx.value || "0"),
+          });
+          await approvalPublicClient.waitForTransactionReceipt({ hash: approvalHash });
+        }
+      }
 
       // Sign Permit2 if required
       if (permit2SigningPayload) {

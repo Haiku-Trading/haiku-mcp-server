@@ -262,6 +262,7 @@ export interface HaikuApiError {
 export interface QuoteToolResponse extends QuoteResponse {
   requiresPermit2Signature: boolean;
   requiresBridgeSignature: boolean;
+  sourceChainId: number;
   permit2SigningPayload?: SigningPayload;
   bridgeSigningPayload?: SigningPayload;
 }

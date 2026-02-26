@@ -4,6 +4,14 @@ import type { QuoteToolResponse } from "../types/index.js";
 import { sanitizeBigInts } from "../utils/sanitize.js";
 import { normalizeBigInts } from "./prepare-signatures.js";
 
+const SLUG_TO_CHAIN_ID: Record<string, number> = {
+  arb: 42161, base: 8453,  bera: 80094, eth: 1,    poly: 137,
+  opt: 10,    bsc: 56,     avax: 43114, gnosis: 100, sonic: 146,
+  worldchain: 480, scroll: 534352, lisk: 1135, sei: 1329,
+  bob: 60808, hype: 999,   katana: 747474, monad: 143,
+  plasma: 9745, uni: 130,  ape: 33139,
+};
+
 /**
  * Schema for haiku_get_quote tool parameters
  */
@@ -50,11 +58,19 @@ export async function handleGetQuote(
   const requiresPermit2Signature = !!response.permit2Datas;
   const requiresBridgeSignature = response.isComplexBridge && !!response.destinationBridge;
 
+  // Derive sourceChainId: permit2 domain is most reliable; fallback to slug from first inputPositions key
+  const firstInputSlug = Object.keys(params.inputPositions)[0]?.split(':')[0];
+  const sourceChainId: number =
+    (response.permit2Datas as any)?.domain?.chainId ||
+    (firstInputSlug ? SLUG_TO_CHAIN_ID[firstInputSlug] : undefined) ||
+    42161;
+
   // Sanitize BigInt hex objects to strings for JSON serialization
   const sanitized = sanitizeBigInts({
     ...response,
     requiresPermit2Signature,
     requiresBridgeSignature,
+    sourceChainId,
   }) as QuoteToolResponse;
 
   // Extract normalized signing payloads for direct surfacing
@@ -115,7 +131,8 @@ export function formatQuoteResponse(response: QuoteToolResponse): string {
     lines.push(
       "",
       `=== Required Approvals (${response.approvals.length}) ===`,
-      "You must execute these ERC-20 approval transactions first."
+      "Pass the `approvals` array to haiku_execute — in self-contained mode (WALLET_PRIVATE_KEY set) " +
+      "they are sent and confirmed on-chain automatically before the swap."
     );
   }
 
