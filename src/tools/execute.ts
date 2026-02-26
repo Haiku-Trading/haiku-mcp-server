@@ -364,10 +364,35 @@ export async function handleExecute(
         });
         for (const approval of approvals) {
           const approvalTx = fixBigInts(approval) as any;
+          const approvalTo = approvalTx.to as `0x${string}`;
+          const approvalData = approvalTx.data as `0x${string}`;
+          const approvalValue = BigInt(approvalTx.value || "0");
+
+          let approvalGasParams: { gas?: bigint; maxFeePerGas?: bigint; maxPriorityFeePerGas?: bigint } = {};
+          try {
+            const [estimatedGas, feeData] = await Promise.all([
+              approvalPublicClient.estimateGas({
+                account: walletClient.account,
+                to: approvalTo,
+                data: approvalData,
+                value: approvalValue,
+              }),
+              approvalPublicClient.estimateFeesPerGas(),
+            ]);
+            approvalGasParams = {
+              gas: (estimatedGas * 6n) / 5n,
+              maxFeePerGas: feeData.maxFeePerGas,
+              maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
+            };
+          } catch {
+            // Fall back to viem/RPC defaults
+          }
+
           const approvalHash = await walletClient.sendTransaction({
-            to: approvalTx.to as `0x${string}`,
-            data: approvalTx.data as `0x${string}`,
-            value: BigInt(approvalTx.value || "0"),
+            to: approvalTo,
+            data: approvalData,
+            value: approvalValue,
+            ...approvalGasParams,
           });
           await approvalPublicClient.waitForTransactionReceipt({ hash: approvalHash });
         }
