@@ -180,21 +180,41 @@ export interface IntentResponse {
 }
 
 /**
+ * Token object returned inline by the /quote endpoint
+ */
+export interface ApiToken {
+  chainId: number;
+  address: string;
+  decimals: number;
+  symbol: string;
+  name: string;
+  tokenKey: string;
+  logoUri?: string;
+}
+
+/**
  * Response from POST /quote
  */
 export interface QuoteResponse {
   quoteId: string;
   funds: Array<{
-    token: TokenIID;
+    token: ApiToken;
     amount: string;
+    amountMin?: string;
+    amountUSD?: number;
   }>;
   fees: Array<{
-    token: TokenIID;
+    token: ApiToken;
     amount: string;
+    amountMin?: string;
+    amountUSD?: number;
   }>;
   balances: Array<{
-    token: TokenIID;
+    token: ApiToken;
     amount: string;
+    amountMin?: string;
+    amountUSD?: number;
+    amountMinUSD?: number;
   }>;
   approvals: ApprovalTransaction[];
   permit2Datas?: Permit2Data;

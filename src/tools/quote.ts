@@ -13,6 +13,10 @@ const SLUG_TO_CHAIN_ID: Record<string, number> = {
   plasma: 9745, uni: 130,  ape: 33139, megaeth: 4326,
 };
 
+const CHAIN_ID_TO_SLUG: Record<number, string> = Object.fromEntries(
+  Object.entries(SLUG_TO_CHAIN_ID).map(([slug, id]) => [id, slug])
+);
+
 /**
  * Schema for haiku_get_quote tool parameters
  */
@@ -118,6 +122,11 @@ export async function handleGetQuote(
   return sanitized;
 }
 
+function tokenLabel(token: { symbol: string; chainId: number }): string {
+  const slug = CHAIN_ID_TO_SLUG[token.chainId] ?? `chain:${token.chainId}`;
+  return `${token.symbol} (${slug})`;
+}
+
 /**
  * Format quote response for human-readable output
  */
@@ -129,17 +138,23 @@ export function formatQuoteResponse(response: QuoteToolResponse): string {
   ];
 
   for (const fund of response.funds) {
-    lines.push(`  ${fund.token}: ${fund.amount}`);
+    lines.push(`  ${tokenLabel(fund.token)}: ${fund.amount}`);
   }
 
   lines.push("", "=== Output (What you'll receive) ===");
   for (const balance of response.balances) {
-    lines.push(`  ${balance.token}: ${balance.amount}`);
+    const usd = balance.amountUSD != null ? ` (~$${balance.amountUSD.toFixed(2)})` : "";
+    lines.push(`  ${tokenLabel(balance.token)}: ${balance.amount}${usd}`);
   }
 
   lines.push("", "=== Fees ===");
-  for (const fee of response.fees) {
-    lines.push(`  ${fee.token}: ${fee.amount}`);
+  const nonZeroFees = response.fees.filter((f) => f.amount !== "0");
+  if (nonZeroFees.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const fee of nonZeroFees) {
+      lines.push(`  ${tokenLabel(fee.token)}: ${fee.amount}`);
+    }
   }
 
   lines.push(
