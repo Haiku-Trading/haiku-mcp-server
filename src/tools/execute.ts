@@ -495,6 +495,7 @@ export async function handleExecute(
       maxFeePerGas?: bigint;
       maxPriorityFeePerGas?: bigint;
     } = {};
+    let nativeBalance: bigint | undefined;
 
     try {
       const publicClient = createPublicClient({
@@ -502,7 +503,7 @@ export async function handleExecute(
         transport: http(getRpcUrl(sourceChainId)),
       });
 
-      const [estimatedGas, feeData] = await Promise.all([
+      const [estimatedGas, feeData, balance] = await Promise.all([
         publicClient.estimateGas({
           account: walletClient.account,
           to: transaction.to,
@@ -510,7 +511,10 @@ export async function handleExecute(
           value: transaction.value,
         }),
         publicClient.estimateFeesPerGas(),
+        publicClient.getBalance({ address: walletClient.account.address }),
       ]);
+
+      nativeBalance = balance;
 
       // 20% buffer: (estimatedGas * 6) / 5
       gasParams = {
@@ -520,6 +524,22 @@ export async function handleExecute(
       };
     } catch {
       // Estimation failed — fall back to viem/RPC defaults (current behaviour)
+    }
+
+    // Balance check: native value + gas cost must not exceed wallet balance
+    if (nativeBalance !== undefined && gasParams.gas && gasParams.maxFeePerGas) {
+      const estimatedGasCost = gasParams.gas * gasParams.maxFeePerGas;
+      const totalRequired = transaction.value + estimatedGasCost;
+      if (totalRequired > nativeBalance) {
+        return {
+          success: false,
+          mode,
+          error:
+            `Insufficient native balance: need ~${totalRequired} wei ` +
+            `(tx value ${transaction.value} + estimated gas ${estimatedGasCost}), ` +
+            `wallet has ${nativeBalance} wei.`,
+        };
+      }
     }
 
     const txHash = await walletClient.sendTransaction({
