@@ -222,22 +222,6 @@ export interface UnsignedTransaction {
 }
 
 /**
- * Request body for POST /buildIntentNaturalLanguage
- */
-export interface NaturalLanguageRequest {
-  text_prompt: string;
-  wallet_positions: Record<TokenIID, string>;
-  prices: Record<TokenIID, string>;
-}
-
-/**
- * Response from POST /buildIntentNaturalLanguage
- */
-export interface NaturalLanguageResponse {
-  intent: QuoteIntent;
-}
-
-/**
  * Haiku API configuration
  */
 export interface HaikuConfig {

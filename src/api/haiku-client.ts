@@ -6,8 +6,6 @@ import type {
   QuoteResponse,
   SolveRequest,
   UnsignedTransaction,
-  NaturalLanguageRequest,
-  NaturalLanguageResponse,
 } from "../types/index.js";
 
 const DEFAULT_BASE_URL = "https://api.haiku.trade/v1";
@@ -158,18 +156,6 @@ export class HaikuClient {
     });
   }
 
-  /**
-   * Convert natural language to a structured trading intent
-   * @param params - Text prompt and wallet context
-   */
-  async buildNaturalLanguageIntent(
-    params: NaturalLanguageRequest
-  ): Promise<NaturalLanguageResponse> {
-    return this.request<NaturalLanguageResponse>("/buildIntentNaturalLanguage", {
-      method: "POST",
-      body: JSON.stringify(params),
-    });
-  }
 }
 
 /**
