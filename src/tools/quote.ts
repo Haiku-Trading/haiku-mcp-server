@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { privateKeyToAccount } from "viem/accounts";
 import type { HaikuClient } from "../api/haiku-client.js";
 import type { QuoteToolResponse } from "../types/index.js";
 import { sanitizeBigInts } from "../utils/sanitize.js";
@@ -36,7 +37,11 @@ export const getQuoteSchema = z.object({
   receiver: z
     .string()
     .optional()
-    .describe("Wallet address to receive the output tokens. Defaults to sender."),
+    .describe(
+      "Wallet address (0x...) to receive the output tokens. " +
+      "Required by the API — if omitted, auto-derived from WALLET_PRIVATE_KEY env var. " +
+      "Must be provided explicitly if WALLET_PRIVATE_KEY is not set."
+    ),
 });
 
 export type GetQuoteParams = z.infer<typeof getQuoteSchema>;
@@ -48,11 +53,26 @@ export async function handleGetQuote(
   client: HaikuClient,
   params: GetQuoteParams
 ): Promise<QuoteToolResponse> {
+  let receiver = params.receiver;
+
+  if (!receiver) {
+    const privateKey = process.env.WALLET_PRIVATE_KEY;
+    if (!privateKey) {
+      throw new Error(
+        "receiver is required by the API. Either pass it explicitly or set WALLET_PRIVATE_KEY env var to auto-derive it."
+      );
+    }
+    const normalizedKey = privateKey.startsWith("0x")
+      ? (privateKey as `0x${string}`)
+      : (`0x${privateKey}` as `0x${string}`);
+    receiver = privateKeyToAccount(normalizedKey).address;
+  }
+
   const response = await client.getQuote({
     inputPositions: params.inputPositions,
     targetWeights: params.targetWeights,
     slippage: params.slippage,
-    receiver: params.receiver,
+    receiver,
   });
 
   const requiresPermit2Signature = !!response.permit2Datas;
