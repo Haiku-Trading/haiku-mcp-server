@@ -9,7 +9,7 @@ import type {
 } from "../types/index.js";
 
 const DEFAULT_BASE_URL = "https://api.haiku.trade/v1";
-const HAIKU_SOURCE_HEADER_VALUE = "haiku-mcp-server/0.0.4";
+const HAIKU_SOURCE_HEADER_VALUE = "haiku-mcp-server/0.0.5";
 
 /**
  * HTTP client for the Haiku API
