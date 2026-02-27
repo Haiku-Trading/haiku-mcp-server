@@ -1,8 +1,21 @@
 import { z } from "zod";
+import { privateKeyToAccount } from "viem/accounts";
 import type { HaikuClient } from "../api/haiku-client.js";
 import type { QuoteToolResponse } from "../types/index.js";
 import { sanitizeBigInts } from "../utils/sanitize.js";
 import { normalizeBigInts } from "./prepare-signatures.js";
+
+const SLUG_TO_CHAIN_ID: Record<string, number> = {
+  arb: 42161, base: 8453,  bera: 80094, eth: 1,    poly: 137,
+  opt: 10,    bsc: 56,     avax: 43114, gnosis: 100, sonic: 146,
+  worldchain: 480, scroll: 534352, lisk: 1135, sei: 1329,
+  bob: 60808, hype: 999,   katana: 747474, monad: 143,
+  plasma: 9745, uni: 130,  ape: 33139, megaeth: 4326,
+};
+
+const CHAIN_ID_TO_SLUG: Record<number, string> = Object.fromEntries(
+  Object.entries(SLUG_TO_CHAIN_ID).map(([slug, id]) => [id, slug])
+);
 
 /**
  * Schema for haiku_get_quote tool parameters
@@ -28,7 +41,11 @@ export const getQuoteSchema = z.object({
   receiver: z
     .string()
     .optional()
-    .describe("Wallet address to receive the output tokens. Defaults to sender."),
+    .describe(
+      "Wallet address (0x...) to receive the output tokens. " +
+      "Required by the API — if omitted, auto-derived from WALLET_PRIVATE_KEY env var. " +
+      "Must be provided explicitly if WALLET_PRIVATE_KEY is not set."
+    ),
 });
 
 export type GetQuoteParams = z.infer<typeof getQuoteSchema>;
@@ -40,21 +57,44 @@ export async function handleGetQuote(
   client: HaikuClient,
   params: GetQuoteParams
 ): Promise<QuoteToolResponse> {
+  let receiver = params.receiver;
+
+  if (!receiver) {
+    const privateKey = process.env.WALLET_PRIVATE_KEY;
+    if (!privateKey) {
+      throw new Error(
+        "receiver is required by the API. Either pass it explicitly or set WALLET_PRIVATE_KEY env var to auto-derive it."
+      );
+    }
+    const normalizedKey = privateKey.startsWith("0x")
+      ? (privateKey as `0x${string}`)
+      : (`0x${privateKey}` as `0x${string}`);
+    receiver = privateKeyToAccount(normalizedKey).address;
+  }
+
   const response = await client.getQuote({
     inputPositions: params.inputPositions,
     targetWeights: params.targetWeights,
     slippage: params.slippage,
-    receiver: params.receiver,
+    receiver,
   });
 
   const requiresPermit2Signature = !!response.permit2Datas;
   const requiresBridgeSignature = response.isComplexBridge && !!response.destinationBridge;
+
+  // Derive sourceChainId: permit2 domain is most reliable; fallback to slug from first inputPositions key
+  const firstInputSlug = Object.keys(params.inputPositions)[0]?.split(':')[0];
+  const sourceChainId: number =
+    (response.permit2Datas as any)?.domain?.chainId ||
+    (firstInputSlug ? SLUG_TO_CHAIN_ID[firstInputSlug] : undefined) ||
+    42161;
 
   // Sanitize BigInt hex objects to strings for JSON serialization
   const sanitized = sanitizeBigInts({
     ...response,
     requiresPermit2Signature,
     requiresBridgeSignature,
+    sourceChainId,
   }) as QuoteToolResponse;
 
   // Extract normalized signing payloads for direct surfacing
@@ -82,6 +122,11 @@ export async function handleGetQuote(
   return sanitized;
 }
 
+function tokenLabel(token: { symbol: string; chainId: number }): string {
+  const slug = CHAIN_ID_TO_SLUG[token.chainId] ?? `chain:${token.chainId}`;
+  return `${token.symbol} (${slug})`;
+}
+
 /**
  * Format quote response for human-readable output
  */
@@ -93,29 +138,36 @@ export function formatQuoteResponse(response: QuoteToolResponse): string {
   ];
 
   for (const fund of response.funds) {
-    lines.push(`  ${fund.token}: ${fund.amount}`);
+    lines.push(`  ${tokenLabel(fund.token)}: ${fund.amount}`);
   }
 
   lines.push("", "=== Output (What you'll receive) ===");
   for (const balance of response.balances) {
-    lines.push(`  ${balance.token}: ${balance.amount}`);
+    const usd = balance.amountUSD != null ? ` (~$${balance.amountUSD.toFixed(2)})` : "";
+    lines.push(`  ${tokenLabel(balance.token)}: ${balance.amount}${usd}`);
   }
 
   lines.push("", "=== Fees ===");
-  for (const fee of response.fees) {
-    lines.push(`  ${fee.token}: ${fee.amount}`);
+  const nonZeroFees = response.fees.filter((f) => f.amount !== "0");
+  if (nonZeroFees.length === 0) {
+    lines.push("  (none)");
+  } else {
+    for (const fee of nonZeroFees) {
+      lines.push(`  ${tokenLabel(fee.token)}: ${fee.amount}`);
+    }
   }
 
   lines.push(
     "",
-    `Gas Estimate: ${response.gas.amount} (~$${response.gas.amountUSD})`
+    `Gas Estimate: ${response.gas.amount} (~$${response.gas.usd})`
   );
 
   if (response.approvals.length > 0) {
     lines.push(
       "",
       `=== Required Approvals (${response.approvals.length}) ===`,
-      "You must execute these ERC-20 approval transactions first."
+      "Pass the `approvals` array to haiku_execute — in self-contained mode (WALLET_PRIVATE_KEY set) " +
+      "they are sent and confirmed on-chain automatically before the swap."
     );
   }
 

@@ -149,27 +149,6 @@ async function main() {
   }
   console.log();
 
-  // 10. Natural Language Intent (may fail)
-  console.log("10. haiku_natural_language_intent");
-  if (balances) {
-    try {
-      const request = {
-        text_prompt: "swap 0.001 ETH for USDC on Arbitrum",
-        wallet_positions: balances.wallet_positions,
-        prices: balances.prices,
-      };
-      const response = await client.buildNaturalLanguageIntent(request);
-      savePayload("10-natural-language-intent", { request, response });
-      console.log(`   Intent parsed successfully`);
-    } catch (e: any) {
-      savePayload("10-natural-language-intent", {
-        request: { text_prompt: "swap 0.001 ETH for USDC on Arbitrum" },
-        response: { error: e.message }
-      });
-      console.error(`   Error: ${e.message}`);
-    }
-  }
-  console.log();
 
   console.log("=".repeat(60));
   console.log("Done! Browse JSON files in ./qa-payloads/");

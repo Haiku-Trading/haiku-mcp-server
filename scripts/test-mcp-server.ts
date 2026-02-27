@@ -187,28 +187,7 @@ async function runTests() {
     }
     console.log();
 
-    // Test 3: haiku_natural_language_intent
-    console.log("3. Testing haiku_natural_language_intent...");
-    console.log("-".repeat(40));
-    const nlResponse = await client.callTool("haiku_natural_language_intent", {
-      prompt: "swap 0.001 ETH for USDC on Arbitrum",
-      walletAddress: TEST_WALLET,
-    });
-    if (nlResponse.error) {
-      console.error(`✗ Error: ${nlResponse.error.message}`);
-    } else {
-      const content = (nlResponse.result as any)?.content?.[0]?.text || "";
-      const isError = (nlResponse.result as any)?.isError;
-      if (isError) {
-        console.log(`⚠ API returned error (likely backend issue): ${content.substring(0, 100)}...`);
-      } else {
-        console.log(`✓ Intent parsed successfully`);
-        console.log(`  Preview: ${content.substring(0, 200)}...`);
-      }
-    }
-    console.log();
-
-    // Test 4: haiku_get_quote
+    // Test 3: haiku_get_quote
     console.log("4. Testing haiku_get_quote (native ETH -> USDC)...");
     console.log("-".repeat(40));
     const quoteResponse = await client.callTool("haiku_get_quote", {

@@ -111,7 +111,14 @@ const TOOLS = [
           type: "object",
           additionalProperties: { type: "string" },
           description:
-            'Map of token IID to amount. Example: { "arb:0x82aF...": "1.5" }',
+            'Map of token IID to amount. IID format: "<chain-slug>:<token-address>". ' +
+            'Supported chain slugs: arb=Arbitrum(42161), base=Base(8453), eth=Ethereum(1), ' +
+            'poly=Polygon(137), opt=Optimism(10), bsc=BNB Chain(56), avax=Avalanche(43114), ' +
+            'gnosis=Gnosis(100), sonic=Sonic(146), worldchain=World Chain(480), ' +
+            'scroll=Scroll(534352), lisk=Lisk(1135), sei=Sei(1329), bera=Berachain(80094), ' +
+            'bob=BOB(60808), hype=Hyperliquid(999), katana=Katana(747474), monad=Monad(143), ' +
+            'plasma=Plasma(9745), uni=Unichain(130), ape=ApeChain(33139), megaeth=MegaETH(4326). ' +
+            'Example: { "arb:0x82aF49447D8a07e3bd95BD0d56f35241523fBab1": "1.5" }',
         },
         targetWeights: {
           type: "object",
@@ -242,35 +249,50 @@ const TOOLS = [
   {
     name: "haiku_execute",
     description:
-      "Execute a quote end-to-end. Two modes:\n" +
-      "1. Self-contained: Set WALLET_PRIVATE_KEY env var → signs + solves + broadcasts automatically\n" +
-      "2. External signatures: Pass pre-signed permit2Signature/userSignature from wallet MCP\n" +
-      "Set broadcast=false to get unsigned tx for external broadcasting.",
+      "Step 2 of 2: Execute a quote. Call haiku_get_quote first to get a quoteId, " +
+      "then pass it here.\n" +
+      "Self-contained mode (WALLET_PRIVATE_KEY set): pass permit2SigningPayload and " +
+      "bridgeSigningPayload from the quote response — the server signs and broadcasts automatically.\n" +
+      "External signature mode: pass pre-signed permit2Signature/userSignature from a wallet MCP.\n" +
+      "Set broadcast=false to get the unsigned tx for manual broadcasting.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        quoteResponse: {
+        quoteId: {
+          type: "string",
+          description: "Quote ID from haiku_get_quote",
+        },
+        permit2SigningPayload: {
           type: "object",
-          description: "Full response from haiku_get_quote",
+          description: "permit2SigningPayload from haiku_get_quote (for self-contained signing)",
+        },
+        bridgeSigningPayload: {
+          type: "object",
+          description: "bridgeSigningPayload from haiku_get_quote (cross-chain only, for self-contained signing)",
         },
         permit2Signature: {
           type: "string",
-          description:
-            "Pre-signed Permit2 signature from external wallet. " +
-            "Get payload from haiku_prepare_signatures.",
+          description: "Pre-signed Permit2 signature (external wallet mode)",
         },
         userSignature: {
           type: "string",
-          description:
-            "Pre-signed bridge intent signature from external wallet (cross-chain only).",
+          description: "Pre-signed bridge intent signature (external wallet mode)",
+        },
+        approvals: {
+          type: "array",
+          items: { type: "object" },
+          description: "approvals from haiku_get_quote — sent automatically in self-contained mode",
+        },
+        sourceChainId: {
+          type: "number",
+          description: "sourceChainId from haiku_get_quote response",
         },
         broadcast: {
           type: "boolean",
-          description:
-            "If true (default), broadcasts tx. If false, returns unsigned tx.",
+          description: "If true (default), broadcasts tx. If false, returns unsigned tx.",
         },
       },
-      required: ["quoteResponse"],
+      required: ["quoteId"],
     },
   },
 ];
@@ -336,7 +358,7 @@ export function createServer(): Server {
           return {
             content: [
               { type: "text", text: formatQuoteResponse(result) },
-              { type: "text", text: "\n\nRaw response:\n" + JSON.stringify(result, null, 2) },
+              { type: "text", text: "\n\n---\nPass to haiku_execute: quoteId (required); sourceChainId (always); permit2SigningPayload + bridgeSigningPayload if present (for WALLET_PRIVATE_KEY signing); approvals if present (sent automatically in self-contained mode):\n" + JSON.stringify(result, null, 2) },
             ],
           };
         }

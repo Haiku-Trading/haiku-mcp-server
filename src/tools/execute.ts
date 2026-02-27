@@ -20,10 +20,25 @@ import type { HaikuClient } from "../api/haiku-client.js";
  * Note: Private key is ONLY read from env var for security (not accepted as parameter)
  */
 export const executeSchema = z.object({
-  quoteResponse: z
-    .any()
+  quoteId: z
+    .string()
+    .describe("Quote ID from haiku_get_quote. Required to call /solve."),
+
+  // For self-contained signing (WALLET_PRIVATE_KEY mode only)
+  permit2SigningPayload: z
+    .record(z.string(), z.unknown())
+    .optional()
     .describe(
-      "The full quote response from haiku_get_quote. Must include quoteId and intent."
+      "permit2SigningPayload from haiku_get_quote. Required for self-contained signing " +
+        "when WALLET_PRIVATE_KEY is set and the swap needs Permit2 approval."
+    ),
+
+  bridgeSigningPayload: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe(
+      "bridgeSigningPayload from haiku_get_quote. Required for self-contained signing " +
+        "of cross-chain swaps with complex bridges."
     ),
 
   // External signatures (from wallet MCP)
@@ -42,13 +57,19 @@ export const executeSchema = z.object({
         "Required for cross-chain swaps with complex bridges."
     ),
 
-  // Transaction sender (required for external signature mode without env key)
-  senderAddress: z
-    .string()
+  approvals: z
+    .array(z.record(z.string(), z.unknown()))
     .optional()
     .describe(
-      "Sender wallet address (0x...). Required when using external signatures " +
-        "without WALLET_PRIVATE_KEY env var, so the tool knows which address to broadcast from."
+      "approvals array from haiku_get_quote. In self-contained mode (WALLET_PRIVATE_KEY set), " +
+      "these ERC-20 approval transactions are sent and confirmed before the main swap."
+    ),
+
+  sourceChainId: z
+    .number()
+    .optional()
+    .describe(
+      "sourceChainId from haiku_get_quote response. Used as chain fallback when permit2SigningPayload is absent."
     ),
 
   broadcast: z
@@ -129,6 +150,14 @@ const apeChain = defineChain({
   blockExplorers: { default: { name: "ApeScan", url: "https://apescan.io" } },
 });
 
+const megaeth = defineChain({
+  id: 4326,
+  name: "MegaETH",
+  nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+  rpcUrls: { default: { http: ["https://mainnet.megaeth.com/rpc"] } },
+  blockExplorers: { default: { name: "MegaETH Explorer", url: "https://mega.etherscan.io" } },
+});
+
 /**
  * Chain ID to viem chain mapping - all 21 supported chains
  */
@@ -156,6 +185,7 @@ const CHAIN_MAP: Record<number, Chain> = {
   9745: plasma,
   130: unichain,
   33139: apeChain,
+  4326: megaeth,
 };
 
 /**
@@ -190,6 +220,7 @@ function getRpcUrl(chainId: number): string {
     9745: "https://rpc.plasma.network",
     130: "https://rpc.unichain.org",
     33139: "https://rpc.apechain.com",
+    4326: "https://mainnet.megaeth.com/rpc",
   };
 
   return publicRpcs[chainId] || `https://rpc.ankr.com/${chainId}`;
@@ -242,6 +273,7 @@ function getExplorerUrl(chainId: number, txHash: string): string {
     9745: "https://explorer.plasma.network",
     130: "https://explorer.unichain.org",
     33139: "https://apescan.io",
+    4326: "https://mega.etherscan.io",
   };
 
   const base = explorers[chainId] || `https://blockscan.com`;
@@ -283,7 +315,7 @@ export async function handleExecute(
   client: HaikuClient,
   params: ExecuteParams
 ): Promise<ExecuteResult> {
-  const { quoteResponse, broadcast = true } = params;
+  const { quoteId, permit2SigningPayload, bridgeSigningPayload, approvals, broadcast = true } = params;
 
   // Private key ONLY from env var (security: never accept as parameter)
   const hasPrivateKey = !!process.env.WALLET_PRIVATE_KEY;
@@ -301,19 +333,10 @@ export async function handleExecute(
     };
   }
 
-  const quoteId = quoteResponse.quoteId;
-
-  if (!quoteId) {
-    return {
-      success: false,
-      mode: "prepare-only",
-      error: "quoteResponse must contain quoteId",
-    };
-  }
-
   const sourceChainId =
-    quoteResponse.permit2Datas?.domain?.chainId ||
-    quoteResponse.funds?.[0]?.token?.chainId || 42161;
+    (permit2SigningPayload as any)?.domain?.chainId ||
+    params.sourceChainId ||
+    42161;
   const chain = CHAIN_MAP[sourceChainId];
   if (!chain) {
     return {
@@ -344,26 +367,67 @@ export async function handleExecute(
         transport: http(getRpcUrl(sourceChainId)),
       });
 
+      // Send ERC20 approval transactions first (must confirm before swap)
+      if (approvals && approvals.length > 0) {
+        const approvalPublicClient = createPublicClient({
+          chain,
+          transport: http(getRpcUrl(sourceChainId)),
+        });
+        for (const approval of approvals) {
+          const approvalTx = fixBigInts(approval) as any;
+          const approvalTo = approvalTx.to as `0x${string}`;
+          const approvalData = approvalTx.data as `0x${string}`;
+          const approvalValue = BigInt(approvalTx.value || "0");
+
+          let approvalGasParams: { gas?: bigint; maxFeePerGas?: bigint; maxPriorityFeePerGas?: bigint } = {};
+          try {
+            const [estimatedGas, feeData] = await Promise.all([
+              approvalPublicClient.estimateGas({
+                account: walletClient.account,
+                to: approvalTo,
+                data: approvalData,
+                value: approvalValue,
+              }),
+              approvalPublicClient.estimateFeesPerGas(),
+            ]);
+            approvalGasParams = {
+              gas: (estimatedGas * 6n) / 5n,
+              maxFeePerGas: feeData.maxFeePerGas,
+              maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
+            };
+          } catch {
+            // Fall back to viem/RPC defaults
+          }
+
+          const approvalHash = await walletClient.sendTransaction({
+            to: approvalTo,
+            data: approvalData,
+            value: approvalValue,
+            ...approvalGasParams,
+          });
+          await approvalPublicClient.waitForTransactionReceipt({ hash: approvalHash });
+        }
+      }
+
       // Sign Permit2 if required
-      if (quoteResponse.permit2Datas) {
-        const permit2Data = fixBigInts(quoteResponse.permit2Datas);
+      if (permit2SigningPayload) {
+        const p2 = fixBigInts(permit2SigningPayload);
         permit2Signature = await walletClient.signTypedData({
-          domain: permit2Data.domain,
-          types: permit2Data.types,
-          primaryType: permit2Data.primaryType || (permit2Data.types?.PermitBatch ? "PermitBatch" : "PermitSingle"),
-          message: permit2Data.values,
+          domain: p2.domain,
+          types: p2.types,
+          primaryType: p2.primaryType,
+          message: p2.message,
         });
       }
 
       // Sign bridge intent if required
-      const bridgeTypedData = quoteResponse.destinationBridge?.unsignedTypeV4Digest;
-      if (bridgeTypedData) {
-        const bridgeData = fixBigInts(bridgeTypedData);
+      if (bridgeSigningPayload) {
+        const bridge = fixBigInts(bridgeSigningPayload);
         userSignature = await walletClient.signTypedData({
-          domain: bridgeData.domain,
-          types: bridgeData.types,
-          primaryType: bridgeData.primaryType || Object.keys(bridgeData.types)[0],
-          message: bridgeData.message || bridgeData.values,
+          domain: bridge.domain,
+          types: bridge.types,
+          primaryType: bridge.primaryType,
+          message: bridge.message,
         });
       }
     }
@@ -442,6 +506,7 @@ export async function handleExecute(
       maxFeePerGas?: bigint;
       maxPriorityFeePerGas?: bigint;
     } = {};
+    let nativeBalance: bigint | undefined;
 
     try {
       const publicClient = createPublicClient({
@@ -449,7 +514,7 @@ export async function handleExecute(
         transport: http(getRpcUrl(sourceChainId)),
       });
 
-      const [estimatedGas, feeData] = await Promise.all([
+      const [estimatedGas, feeData, balance] = await Promise.all([
         publicClient.estimateGas({
           account: walletClient.account,
           to: transaction.to,
@@ -457,7 +522,10 @@ export async function handleExecute(
           value: transaction.value,
         }),
         publicClient.estimateFeesPerGas(),
+        publicClient.getBalance({ address: walletClient.account.address }),
       ]);
+
+      nativeBalance = balance;
 
       // 20% buffer: (estimatedGas * 6) / 5
       gasParams = {
@@ -467,6 +535,22 @@ export async function handleExecute(
       };
     } catch {
       // Estimation failed — fall back to viem/RPC defaults (current behaviour)
+    }
+
+    // Balance check: native value + gas cost must not exceed wallet balance
+    if (nativeBalance !== undefined && gasParams.gas && gasParams.maxFeePerGas) {
+      const estimatedGasCost = gasParams.gas * gasParams.maxFeePerGas;
+      const totalRequired = transaction.value + estimatedGasCost;
+      if (totalRequired > nativeBalance) {
+        return {
+          success: false,
+          mode,
+          error:
+            `Insufficient native balance: need ~${totalRequired} wei ` +
+            `(tx value ${transaction.value} + estimated gas ${estimatedGasCost}), ` +
+            `wallet has ${nativeBalance} wei.`,
+        };
+      }
     }
 
     const txHash = await walletClient.sendTransaction({

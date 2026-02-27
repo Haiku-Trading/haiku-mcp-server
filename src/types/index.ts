@@ -163,9 +163,10 @@ export interface ApprovalTransaction {
 /**
  * Gas estimation
  */
+// API returns: gas: { amount: 1082768, usd: "6.417913431017e-8" }
 export interface GasEstimate {
-  amount: string;
-  amountUSD: string;
+  amount: string | number;
+  usd: string;
 }
 
 /**
@@ -179,21 +180,41 @@ export interface IntentResponse {
 }
 
 /**
+ * Token object returned inline by the /quote endpoint
+ */
+export interface ApiToken {
+  chainId: number;
+  address: string;
+  decimals: number;
+  symbol: string;
+  name: string;
+  tokenKey: string;
+  logoUri?: string;
+}
+
+/**
  * Response from POST /quote
  */
 export interface QuoteResponse {
   quoteId: string;
   funds: Array<{
-    token: TokenIID;
+    token: ApiToken;
     amount: string;
+    amountMin?: string;
+    amountUSD?: number;
   }>;
   fees: Array<{
-    token: TokenIID;
+    token: ApiToken;
     amount: string;
+    amountMin?: string;
+    amountUSD?: number;
   }>;
   balances: Array<{
-    token: TokenIID;
+    token: ApiToken;
     amount: string;
+    amountMin?: string;
+    amountUSD?: number;
+    amountMinUSD?: number;
   }>;
   approvals: ApprovalTransaction[];
   permit2Datas?: Permit2Data;
@@ -221,22 +242,6 @@ export interface UnsignedTransaction {
 }
 
 /**
- * Request body for POST /buildIntentNaturalLanguage
- */
-export interface NaturalLanguageRequest {
-  text_prompt: string;
-  wallet_positions: Record<TokenIID, string>;
-  prices: Record<TokenIID, string>;
-}
-
-/**
- * Response from POST /buildIntentNaturalLanguage
- */
-export interface NaturalLanguageResponse {
-  intent: QuoteIntent;
-}
-
-/**
  * Haiku API configuration
  */
 export interface HaikuConfig {
@@ -261,6 +266,7 @@ export interface HaikuApiError {
 export interface QuoteToolResponse extends QuoteResponse {
   requiresPermit2Signature: boolean;
   requiresBridgeSignature: boolean;
+  sourceChainId: number;
   permit2SigningPayload?: SigningPayload;
   bridgeSigningPayload?: SigningPayload;
 }

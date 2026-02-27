@@ -79,6 +79,7 @@ const CHAIN_NAMES: Record<number, string> = {
   146: "Sonic",
   252: "Fraxtal",
   999: "Hyperliquid",
+  4326: "MegaETH",
 };
 
 const PROTOCOL_LABELS: Record<string, string> = {
