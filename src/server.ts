@@ -103,7 +103,8 @@ const TOOLS = [
       "Get a quote for a token swap or portfolio rebalance. " +
       "Returns expected outputs, fees, gas estimates, and any required approvals. " +
       "When signatures are required (Permit2 or bridge), the full EIP-712 signing payloads are included directly in the response. " +
-      "Sign the provided typed data and pass the signatures to haiku_solve.",
+      "Pass quoteId, sourceChainId, signing payloads, and approvals to haiku_execute to sign and broadcast. " +
+      "Use haiku_solve instead only when building unsigned transactions for external broadcast.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -249,11 +250,12 @@ const TOOLS = [
   {
     name: "haiku_execute",
     description:
-      "Step 2 of 2: Execute a quote. Call haiku_get_quote first to get a quoteId, " +
-      "then pass it here.\n" +
+      "Step 2 of 2: Execute a quote. Call haiku_get_quote first, then pass quoteId, sourceChainId, " +
+      "and any signing payloads here.\n" +
       "Self-contained mode (WALLET_PRIVATE_KEY set): pass permit2SigningPayload and " +
       "bridgeSigningPayload from the quote response — the server signs and broadcasts automatically.\n" +
       "External signature mode: pass pre-signed permit2Signature/userSignature from a wallet MCP.\n" +
+      "Always pass sourceChainId from the quote response. Always pass approvals if present.\n" +
       "Set broadcast=false to get the unsigned tx for manual broadcasting.",
     inputSchema: {
       type: "object" as const,
@@ -285,7 +287,7 @@ const TOOLS = [
         },
         sourceChainId: {
           type: "number",
-          description: "sourceChainId from haiku_get_quote response",
+          description: "Chain ID of the source token (from haiku_get_quote). Recommended — if omitted, the server will attempt to recover it from the signing payloads or session cache, but passing it explicitly is safer.",
         },
         broadcast: {
           type: "boolean",
@@ -314,6 +316,7 @@ export function createServer(): Server {
   );
 
   let client: HaikuClient;
+  const quoteCache = new Map<string, number>();
 
   // Initialize client lazily on first tool call
   function getClient(): HaikuClient {
@@ -355,6 +358,7 @@ export function createServer(): Server {
         case "haiku_get_quote": {
           const params = getQuoteSchema.parse(args);
           const result = await handleGetQuote(haikuClient, params);
+          quoteCache.set(result.quoteId, result.sourceChainId);
           return {
             content: [
               { type: "text", text: formatQuoteResponse(result) },
@@ -402,7 +406,11 @@ export function createServer(): Server {
 
         case "haiku_execute": {
           const params = executeSchema.parse(args);
-          const result = await handleExecute(haikuClient, params);
+          const resolvedParams = {
+            ...params,
+            sourceChainId: params.sourceChainId ?? quoteCache.get(params.quoteId),
+          };
+          const result = await handleExecute(haikuClient, resolvedParams);
           return {
             content: [
               { type: "text", text: formatExecuteResponse(result) },

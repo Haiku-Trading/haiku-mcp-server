@@ -335,8 +335,18 @@ export async function handleExecute(
 
   const sourceChainId =
     (permit2SigningPayload as any)?.domain?.chainId ||
-    params.sourceChainId ||
-    42161;
+    (bridgeSigningPayload as any)?.domain?.chainId ||
+    params.sourceChainId;
+
+  if (!sourceChainId) {
+    return {
+      success: false,
+      mode: "prepare-only",
+      error:
+        "sourceChainId could not be determined. Re-run haiku_get_quote and pass sourceChainId explicitly to haiku_execute.",
+    };
+  }
+
   const chain = CHAIN_MAP[sourceChainId];
   if (!chain) {
     return {
