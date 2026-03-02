@@ -17,6 +17,7 @@ import {
   handleGetQuote,
   formatQuoteResponse,
 } from "./tools/quote.js";
+import type { QuoteToolResponse } from "./types/index.js";
 import {
   solveSchema,
   handleSolve,
@@ -102,8 +103,10 @@ const TOOLS = [
     description:
       "Get a quote for a token swap or portfolio rebalance. " +
       "Returns expected outputs, fees, gas estimates, and any required approvals. " +
-      "When signatures are required (Permit2 or bridge), the full EIP-712 signing payloads are included directly in the response. " +
-      "Pass quoteId, sourceChainId, signing payloads, and approvals to haiku_execute to sign and broadcast. " +
+      "When signatures are required (Permit2 or bridge), EIP-712 signing payloads are included in the response. " +
+      "Two execution paths after getting a quote:\n" +
+      "• Self-contained (WALLET_PRIVATE_KEY set): call haiku_execute directly — pass quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present), and approvals. The server signs and broadcasts automatically.\n" +
+      "• External wallet (wallet MCP or no private key): call haiku_prepare_signatures with quoteId to get normalized EIP-712 payloads, sign them externally, then call haiku_execute with the signatures.\n" +
       "Use haiku_solve instead only when building unsigned transactions for external broadcast.",
     inputSchema: {
       type: "object" as const,
@@ -169,19 +172,24 @@ const TOOLS = [
   {
     name: "haiku_prepare_signatures",
     description:
-      "Extract EIP-712 signing payloads from a quote for external wallet signing. " +
-      "Use this when integrating with wallet MCPs (Coinbase Payments MCP, wallet-agent, etc). " +
-      "Returns standardized typed data that any wallet's signTypedData can handle. " +
-      "After signing externally, pass signatures to haiku_solve or haiku_execute.",
+      "External wallet signing path — use this instead of passing signing payloads directly to haiku_execute " +
+      "when WALLET_PRIVATE_KEY is not set or when a wallet MCP (Coinbase Payments MCP, wallet-agent, etc.) handles signing. " +
+      "Extracts and normalizes the EIP-712 payloads from a quote into a standard format any wallet's signTypedData can consume. " +
+      "Pass quoteId (preferred) — the server resolves the full quote from session cache. " +
+      "Alternatively pass the full quoteResponse object if quoteId is unavailable. " +
+      "After signing externally, pass permit2Signature and/or userSignature to haiku_execute.",
     inputSchema: {
       type: "object" as const,
       properties: {
+        quoteId: {
+          type: "string",
+          description: "Quote ID from haiku_get_quote (preferred — server resolves the full quote from session cache)",
+        },
         quoteResponse: {
           type: "object",
-          description: "Full response from haiku_get_quote",
+          description: "Full response from haiku_get_quote (fallback when quoteId is unavailable)",
         },
       },
-      required: ["quoteResponse"],
     },
   },
   {
@@ -250,11 +258,9 @@ const TOOLS = [
   {
     name: "haiku_execute",
     description:
-      "Step 2 of 2: Execute a quote. Call haiku_get_quote first, then pass quoteId, sourceChainId, " +
-      "and any signing payloads here.\n" +
-      "Self-contained mode (WALLET_PRIVATE_KEY set): pass permit2SigningPayload and " +
-      "bridgeSigningPayload from the quote response — the server signs and broadcasts automatically.\n" +
-      "External signature mode: pass pre-signed permit2Signature/userSignature from a wallet MCP.\n" +
+      "Step 2 of 2: Execute a quote. Call haiku_get_quote first, then use one of two signing paths:\n" +
+      "• Self-contained (WALLET_PRIVATE_KEY set): pass quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present), and approvals — the server signs and broadcasts automatically.\n" +
+      "• External wallet (wallet MCP): first call haiku_prepare_signatures with quoteId to get normalized EIP-712 payloads, sign them externally, then pass quoteId, sourceChainId, permit2Signature + userSignature, and approvals here.\n" +
       "Always pass sourceChainId from the quote response. Always pass approvals if present.\n" +
       "Set broadcast=false to get the unsigned tx for manual broadcasting.",
     inputSchema: {
@@ -316,7 +322,7 @@ export function createServer(): Server {
   );
 
   let client: HaikuClient;
-  const quoteCache = new Map<string, number>();
+  const quoteCache = new Map<string, QuoteToolResponse>();
 
   // Initialize client lazily on first tool call
   function getClient(): HaikuClient {
@@ -358,11 +364,11 @@ export function createServer(): Server {
         case "haiku_get_quote": {
           const params = getQuoteSchema.parse(args);
           const result = await handleGetQuote(haikuClient, params);
-          quoteCache.set(result.quoteId, result.sourceChainId);
+          quoteCache.set(result.quoteId, result);
           return {
             content: [
               { type: "text", text: formatQuoteResponse(result) },
-              { type: "text", text: "\n\n---\nPass to haiku_execute: quoteId (required); sourceChainId (always); permit2SigningPayload + bridgeSigningPayload if present (for WALLET_PRIVATE_KEY signing); approvals if present (sent automatically in self-contained mode):\n" + JSON.stringify(result, null, 2) },
+              { type: "text", text: "\n\n---\nNext steps — choose one path:\n• Self-contained (WALLET_PRIVATE_KEY set): call haiku_execute with quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present in this response), and approvals (if present).\n• External wallet (wallet MCP): call haiku_prepare_signatures with quoteId to get normalized signing payloads, sign them externally, then call haiku_execute with quoteId, sourceChainId, the signatures, and approvals.\n\nFull quote data:\n" + JSON.stringify(result, null, 2) },
             ],
           };
         }
@@ -378,7 +384,10 @@ export function createServer(): Server {
         }
 
         case "haiku_prepare_signatures": {
-          const params = prepareSignaturesSchema.parse(args);
+          const resolvedArgs = (args as any)?.quoteResponse
+            ? args
+            : { quoteResponse: quoteCache.get((args as any)?.quoteId as string), quoteId: (args as any)?.quoteId };
+          const params = prepareSignaturesSchema.parse(resolvedArgs);
           const result = handlePrepareSignatures(params);
           return {
             content: [
@@ -408,7 +417,7 @@ export function createServer(): Server {
           const params = executeSchema.parse(args);
           const resolvedParams = {
             ...params,
-            sourceChainId: params.sourceChainId ?? quoteCache.get(params.quoteId),
+            sourceChainId: params.sourceChainId ?? quoteCache.get(params.quoteId)?.sourceChainId,
           };
           const result = await handleExecute(haikuClient, resolvedParams);
           return {

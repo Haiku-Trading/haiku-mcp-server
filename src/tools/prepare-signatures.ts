@@ -7,9 +7,14 @@ export type { SigningPayload };
  * Schema for haiku_prepare_signatures tool parameters
  */
 export const prepareSignaturesSchema = z.object({
+  quoteId: z
+    .string()
+    .optional()
+    .describe("Quote ID from haiku_get_quote (preferred — server looks up the full quote from session cache)"),
   quoteResponse: z
     .any()
-    .describe("The full quote response from haiku_get_quote"),
+    .optional()
+    .describe("Full quote response from haiku_get_quote (fallback when quoteId is unavailable)"),
 });
 
 type PrepareSignaturesParams = z.infer<typeof prepareSignaturesSchema>;
@@ -81,7 +86,15 @@ export function normalizeBigInts(obj: any): any {
 export function handlePrepareSignatures(
   params: PrepareSignaturesParams
 ): PrepareSignaturesResult {
-  const { quoteResponse } = params;
+  const { quoteResponse, quoteId: quoteIdParam } = params;
+
+  if (!quoteResponse) {
+    throw new Error(
+      quoteIdParam
+        ? `Quote "${quoteIdParam}" not found in cache — call haiku_get_quote first in the same session`
+        : "Provide quoteId (preferred) or the full quoteResponse object from haiku_get_quote"
+    );
+  }
 
   const quoteId = quoteResponse.quoteId;
 
