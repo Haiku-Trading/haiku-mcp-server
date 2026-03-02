@@ -145,29 +145,6 @@ async function main() {
     console.log();
   }
 
-  // Test 4: Solve (build unsigned transaction)
-  console.log("4. Testing haiku_solve...");
-  console.log("-".repeat(40));
-  if (quoteId && !requiresPermit2) {
-    try {
-      const tx = await client.solve({ quoteId: quoteId });
-      console.log(`✓ Unsigned transaction received`);
-      console.log(`  To: ${tx.to}`);
-      console.log(`  Value: ${tx.value} wei`);
-      console.log(`  Data length: ${tx.data?.length || 0} chars`);
-      console.log(`  Data preview: ${tx.data?.substring(0, 66)}...`);
-      console.log();
-      console.log(`  This transaction is ready to be signed and broadcast!`);
-    } catch (e) {
-      console.error(`✗ Error: ${e}`);
-    }
-  } else if (requiresPermit2) {
-    console.log(`⚠ Skipping solve - would require Permit2 signature first`);
-  } else {
-    console.log(`⚠ Skipping solve - no quote ID available from previous steps`);
-  }
-
-  console.log();
   console.log("=".repeat(60));
   console.log("Testing complete!");
   console.log("=".repeat(60));
@@ -176,7 +153,6 @@ async function main() {
   console.log("- Token list: Returns tokens with chainId, address, iid, price, etc.");
   console.log("- Balances: Returns wallet_positions and prices maps");
   console.log("- Quote: Returns quoteId, funds, balances, approvals, gas");
-  console.log("- Solve: Returns unsigned tx {to, data, value}");
   console.log();
   console.log("Native ETH input avoids Permit2 requirement - ideal for simple swaps.");
 }

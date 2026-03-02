@@ -19,11 +19,6 @@ import {
 } from "./tools/quote.js";
 import type { QuoteToolResponse } from "./types/index.js";
 import {
-  solveSchema,
-  handleSolve,
-  formatSolveResponse,
-} from "./tools/solve.js";
-import {
   prepareSignaturesSchema,
   handlePrepareSignatures,
   formatPrepareSignaturesResponse,
@@ -105,9 +100,8 @@ const TOOLS = [
       "Returns expected outputs, fees, gas estimates, and any required approvals. " +
       "When signatures are required (Permit2 or bridge), EIP-712 signing payloads are included in the response. " +
       "Two execution paths after getting a quote:\n" +
-      "• Self-contained (WALLET_PRIVATE_KEY set): call haiku_execute directly — pass quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present), and approvals. The server signs and broadcasts automatically.\n" +
-      "• External wallet (wallet MCP or no private key): call haiku_prepare_signatures with quoteId to get normalized EIP-712 payloads, sign them externally, then call haiku_execute with the signatures.\n" +
-      "Use haiku_solve instead only when building unsigned transactions for external broadcast.",
+      "• Path A — Self-contained (WALLET_PRIVATE_KEY set): call haiku_execute with quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present in this response), and approvals. Haiku signs and broadcasts automatically — returns tx hash.\n" +
+      "• Path B — External wallet (wallet MCP): call haiku_prepare_signatures with quoteId to get EIP-712 payloads → sign via wallet MCP → call haiku_execute with quoteId, sourceChainId, the signatures, approvals, and broadcast: false → haiku_execute returns {to, data, value} → broadcast via wallet MCP.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -140,33 +134,6 @@ const TOOLS = [
         },
       },
       required: ["inputPositions", "targetWeights"],
-    },
-  },
-  {
-    name: "haiku_solve",
-    description:
-      "Convert a quote into an unsigned EVM transaction. " +
-      "Requires quoteId from haiku_get_quote. " +
-      "If the quote required Permit2 signature, include permit2Signature. " +
-      "If it was a complex bridge, include userSignature. " +
-      "Returns { to, data, value } - sign and broadcast this transaction.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        quoteId: {
-          type: "string",
-          description: "Quote ID from haiku_get_quote response",
-        },
-        permit2Signature: {
-          type: "string",
-          description: "Signature from signing permit2Datas (if required)",
-        },
-        userSignature: {
-          type: "string",
-          description: "Signature from signing destinationBridge (if required)",
-        },
-      },
-      required: ["quoteId"],
     },
   },
   {
@@ -258,11 +225,10 @@ const TOOLS = [
   {
     name: "haiku_execute",
     description:
-      "Step 2 of 2: Execute a quote. Call haiku_get_quote first, then use one of two signing paths:\n" +
-      "• Self-contained (WALLET_PRIVATE_KEY set): pass quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present), and approvals — the server signs and broadcasts automatically.\n" +
-      "• External wallet (wallet MCP): first call haiku_prepare_signatures with quoteId to get normalized EIP-712 payloads, sign them externally, then pass quoteId, sourceChainId, permit2Signature + userSignature, and approvals here.\n" +
-      "Always pass sourceChainId from the quote response. Always pass approvals if present.\n" +
-      "Set broadcast=false to get the unsigned tx for manual broadcasting.",
+      "Step 2 of 2: Execute a quote. Call haiku_get_quote first, then choose a path:\n" +
+      "• Path A — Self-contained (WALLET_PRIVATE_KEY set): pass quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present in the quote), and approvals. Haiku signs Permit2/bridge internally and broadcasts. Returns tx hash.\n" +
+      "• Path B — External wallet: call haiku_prepare_signatures first to get EIP-712 payloads → sign via wallet MCP → pass quoteId, sourceChainId, permit2Signature + userSignature (from signing), approvals, and broadcast: false. Returns {to, data, value} unsigned tx for you to broadcast via your wallet MCP.\n" +
+      "Always pass sourceChainId and approvals from the quote response.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -368,17 +334,7 @@ export function createServer(): Server {
           return {
             content: [
               { type: "text", text: formatQuoteResponse(result) },
-              { type: "text", text: "\n\n---\nNext steps — choose one path:\n• Self-contained (WALLET_PRIVATE_KEY set): call haiku_execute with quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present in this response), and approvals (if present).\n• External wallet (wallet MCP): call haiku_prepare_signatures with quoteId to get normalized signing payloads, sign them externally, then call haiku_execute with quoteId, sourceChainId, the signatures, and approvals.\n\nFull quote data:\n" + JSON.stringify(result, null, 2) },
-            ],
-          };
-        }
-
-        case "haiku_solve": {
-          const params = solveSchema.parse(args);
-          const result = await handleSolve(haikuClient, params);
-          return {
-            content: [
-              { type: "text", text: formatSolveResponse(result) },
+              { type: "text", text: "\n\n---\nNext steps — choose one path:\n• Path A (self-contained, WALLET_PRIVATE_KEY set): call haiku_execute with quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present above), and approvals (if present). Haiku signs and broadcasts — returns tx hash.\n• Path B (external wallet): call haiku_prepare_signatures with quoteId → sign the returned EIP-712 payloads via your wallet MCP → call haiku_execute with quoteId, sourceChainId, the signatures, approvals, and broadcast: false → haiku_execute returns {to, data, value} → broadcast via your wallet MCP.\n\nFull quote data:\n" + JSON.stringify(result, null, 2) },
             ],
           };
         }

@@ -114,7 +114,7 @@ Get token balances for a wallet address across all chains.
 
 Get a quote for a token swap or portfolio rebalance.
 
-> **Note:** Quotes expire after ~30 seconds. If `haiku_solve` returns error 200000 (quote expired), request a fresh quote and retry the flow.
+> **Note:** Quotes expire after ~30 seconds. If `haiku_execute` returns a quote-expired error, request a fresh quote and retry the flow.
 
 **Parameters:**
 - `inputPositions` (required): Map of token IID to amount to spend
@@ -136,45 +136,28 @@ Get a quote for a token swap or portfolio rebalance.
 }
 ```
 
-### `haiku_solve`
-
-Convert a quote into an unsigned EVM transaction.
-
-**Parameters:**
-- `quoteId` (required): Quote ID from `haiku_get_quote`
-- `permit2Signature` (optional): Signature if Permit2 was required
-- `userSignature` (optional): Signature if complex bridge was required
-
-**Example:**
-```json
-{
-  "quoteId": "abc123...",
-  "permit2Signature": "0x..."
-}
-```
-
 ### `haiku_prepare_signatures`
 
-Extract EIP-712 signing payloads from a quote for external wallet integration.
+Extract and normalize EIP-712 signing payloads from a quote for external wallet signing (Path B only).
 
-Use this when integrating with wallet MCPs (Coinbase Payments MCP, wallet-agent, AgentKit, Safe, etc.). Returns standardized typed data that any wallet's `signTypedData` can handle.
+Use this when a wallet MCP handles signing (Coinbase Payments MCP, wallet-agent, AgentKit, Safe, etc.). Returns standardized typed data that any wallet's `signTypedData` can consume, plus step-by-step instructions.
 
 **Parameters:**
-- `quoteResponse` (required): Full response object from `haiku_get_quote`
+- `quoteId` (preferred): Quote ID from `haiku_get_quote` — server resolves the full quote from session cache
+- `quoteResponse` (fallback): Full response object from `haiku_get_quote`, if quoteId is unavailable
 
 **Returns:**
-- `quoteId`: Quote ID to pass to `haiku_solve`
-- `sourceChainId`: Chain ID for the transaction
 - `requiresPermit2`: Whether Permit2 signature is needed
-- `permit2`: EIP-712 payload for Permit2 (if required)
+- `permit2`: EIP-712 payload to pass to `signTypedData` (if required)
 - `requiresBridgeSignature`: Whether bridge signature is needed
-- `bridgeIntent`: EIP-712 payload for bridge (if required)
+- `bridgeIntent`: EIP-712 payload to pass to `signTypedData` (if required)
+- `sourceChainId`: Chain ID for the transaction
 - `instructions`: Step-by-step instructions for completing the flow
 
 **Example:**
 ```json
 {
-  "quoteResponse": { /* full quote from haiku_get_quote */ }
+  "quoteId": "abc123..."
 }
 ```
 
@@ -225,35 +208,52 @@ and context-specific opportunities based on what the wallet actually holds. Pair
 
 ### `haiku_execute`
 
-Execute a quote end-to-end with flexible signing options.
+Execute a quote. Two distinct paths depending on who holds the private key.
 
-**Modes:**
-1. **Self-contained**: Set `WALLET_PRIVATE_KEY` env var → signs + solves + broadcasts automatically
-2. **External signatures**: Pass pre-signed `permit2Signature`/`userSignature` from wallet MCP
-3. **Prepare-only**: Set `broadcast=false` to get unsigned tx for external broadcasting
+**Path A — Self-contained** (`WALLET_PRIVATE_KEY` set in env): Haiku signs Permit2/bridge payloads internally and broadcasts. Returns a tx hash.
 
 **Parameters:**
-- `quoteResponse` (required): Full response object from `haiku_get_quote`
-- `permit2Signature` (optional): Pre-signed Permit2 signature from external wallet
-- `userSignature` (optional): Pre-signed bridge signature from external wallet
-- `broadcast` (optional): If true (default), broadcasts tx. If false, returns unsigned tx.
+- `quoteId` (required): Quote ID from `haiku_get_quote`
+- `sourceChainId` (required): Chain ID from the quote response
+- `permit2SigningPayload` (optional): Pass through from `haiku_get_quote` if present
+- `bridgeSigningPayload` (optional): Pass through from `haiku_get_quote` if present (cross-chain only)
+- `approvals` (optional): Pass through from `haiku_get_quote` if present
 
-**Example (self-contained):**
+**Example:**
 ```json
 {
-  "quoteResponse": { /* full quote from haiku_get_quote */ }
+  "quoteId": "abc123...",
+  "sourceChainId": 42161,
+  "permit2SigningPayload": { /* from haiku_get_quote, if present */ },
+  "approvals": [ /* from haiku_get_quote, if present */ ]
 }
 ```
-*Requires `WALLET_PRIVATE_KEY` env var to be set.*
 
-**Example (external signatures):**
+---
+
+**Path B — External wallet** (no `WALLET_PRIVATE_KEY`, using a wallet MCP): You sign and broadcast. Set `broadcast: false` — haiku returns `{to, data, value}` for you to broadcast.
+
+Pre-requisite: if the quote requires Permit2 or bridge signatures, call `haiku_prepare_signatures` first, sign via your wallet MCP, then pass the signatures here.
+
+**Parameters:**
+- `quoteId` (required): Quote ID from `haiku_get_quote`
+- `sourceChainId` (required): Chain ID from the quote response
+- `broadcast` (required): Set to `false` to return unsigned tx instead of broadcasting
+- `permit2Signature` (optional): Signature from signing the Permit2 payload via your wallet MCP
+- `userSignature` (optional): Signature from signing the bridge payload via your wallet MCP (cross-chain only)
+- `approvals` (optional): Pass through from `haiku_get_quote` if present — handle these via your wallet MCP before calling haiku_execute
+
+**Example:**
 ```json
 {
-  "quoteResponse": { /* full quote */ },
+  "quoteId": "abc123...",
+  "sourceChainId": 42161,
+  "broadcast": false,
   "permit2Signature": "0x...",
-  "broadcast": false
+  "approvals": [ /* from haiku_get_quote, if present */ ]
 }
 ```
+Returns `{ to, data, value }` — broadcast this via your wallet MCP.
 
 ## Token IID Format
 
@@ -292,89 +292,74 @@ Examples:
 
 ## Workflow Examples
 
-### Simple Swap
+### Path A: Self-Contained Swap (WALLET_PRIVATE_KEY set)
+
+Haiku handles all signing and broadcasting. Returns a tx hash.
 
 ```
-1. Call haiku_get_quote with input tokens and target outputs
-2. If permit2Datas returned: Sign the EIP-712 typed data
-3. Call haiku_solve with quoteId (and permit2Signature if needed)
-4. Sign and broadcast the returned transaction
+1. haiku_get_quote → returns quoteId, sourceChainId, permit2SigningPayload?, bridgeSigningPayload?, approvals?
+2. haiku_execute(quoteId, sourceChainId, permit2SigningPayload?, bridgeSigningPayload?, approvals?)
+   → Haiku signs Permit2/bridge internally, broadcasts, returns tx hash
 ```
 
-### Portfolio Rebalance
+### Path B: External Wallet (wallet MCP handles signing + broadcasting)
 
+Use when WALLET_PRIVATE_KEY is not set and a separate wallet MCP holds the keys.
+
+**Simple swap (no Permit2 or bridge signatures needed, e.g. native ETH input):**
 ```
-1. Call haiku_get_balances to see current holdings
-2. Call haiku_get_quote with multiple target weights
-3. Handle any approvals or Permit2 signatures
-4. Call haiku_solve to get unsigned transaction
-5. Sign and broadcast
+1. haiku_get_quote → returns quoteId, sourceChainId, approvals?
+2. Handle approvals via wallet MCP if present
+3. haiku_execute(quoteId, sourceChainId, broadcast: false)
+   → returns { to, data, value }
+4. Broadcast { to, data, value } via wallet MCP
 ```
 
-### Self-Contained Execution (with WALLET_PRIVATE_KEY)
-
+**With Permit2 or bridge signatures (e.g. ERC-20 input or cross-chain swap):**
 ```
-1. Call haiku_get_quote with input tokens and target outputs
-2. Call haiku_execute with the full quote response
-   → Signs permits, calls solve, broadcasts - all in one call
-3. Done! Transaction hash returned
+1. haiku_get_quote → returns quoteId, sourceChainId, permit2Datas?, destinationBridge?, approvals?
+2. haiku_prepare_signatures(quoteId) → returns normalized EIP-712 payloads + instructions
+3. Sign payloads via wallet MCP (e.g. coinbase_sign_typed_data) → get permit2Signature?, userSignature?
+4. Handle approvals via wallet MCP if present
+5. haiku_execute(quoteId, sourceChainId, permit2Signature?, userSignature?, approvals?, broadcast: false)
+   → returns { to, data, value }
+6. Broadcast { to, data, value } via wallet MCP (e.g. coinbase_send_transaction)
 ```
 
 ### Yield Discovery
 
 ```
-1. Call haiku_discover_yields with category/chain/minTvl filters to find opportunities
-2. Pick a target vault/pool by its iid
-3. Call haiku_get_balances to confirm available input tokens
-4. Call haiku_get_quote with the chosen iid as a targetWeight
-5. Execute via haiku_solve or haiku_execute
+1. haiku_discover_yields with category/chain/minTvl filters → find opportunities, note iid
+2. haiku_get_quote with the chosen iid as a targetWeight
+3. Execute via Path A or Path B above
 ```
 
 ### Portfolio Analysis & Optimization
 
 ```
-1. Call haiku_analyze_portfolio with a wallet address
-2. Review current positions and suggested opportunities
-3. Optionally call haiku_discover_yields for broader market context
-4. Call haiku_get_quote to rebalance into higher-yielding positions
-5. Execute via haiku_solve or haiku_execute
-```
-
-### External Wallet Integration (Coinbase, AgentKit, etc.)
-
-```
-1. Call haiku_get_quote with input tokens and target outputs
-2. Call haiku_prepare_signatures to extract EIP-712 payloads
-3. Sign the payloads via your wallet MCP (e.g., coinbase_sign_typed_data)
-4. Call haiku_solve with quoteId and signatures
-5. Broadcast via your wallet MCP (e.g., coinbase_send_transaction)
+1. haiku_analyze_portfolio with wallet address → review positions and opportunities
+2. Optionally haiku_discover_yields for broader market context
+3. haiku_get_quote to rebalance into higher-yielding positions
+4. Execute via Path A or Path B above
 ```
 
 ## Transaction Signing
 
-This MCP server returns **unsigned transactions only**. The AI agent is responsible for:
+Two modes depending on your setup:
 
-1. Signing ERC-20 approval transactions (if needed)
-2. Signing Permit2 EIP-712 typed data (if needed)
-3. Signing the final transaction
-4. Broadcasting to the network
+**Self-contained** (`WALLET_PRIVATE_KEY` set): `haiku_execute` signs everything internally and broadcasts. Returns a tx hash. No external signing needed.
 
-This design keeps private keys secure and allows agents to use any signing method (hardware wallets, custodial services, MPC, etc.).
+**External wallet** (no `WALLET_PRIVATE_KEY`): The AI agent is responsible for signing and broadcasting. Use `haiku_execute` with `broadcast: false` to get an unsigned `{to, data, value}` transaction, then broadcast it via your wallet MCP. If Permit2 or bridge signatures are required, call `haiku_prepare_signatures` first to get normalized EIP-712 payloads, sign via your wallet MCP, and pass the signatures to `haiku_execute`.
+
+The external wallet design allows agents to use any signing infrastructure (wallet MCPs, hardware wallets, custodial services, MPC, etc.).
 
 ## Cross-Chain Bridge Signatures
 
-For cross-chain swaps, the quote may return `isComplexBridge: true` with a `destinationBridge` object.
+For cross-chain swaps, the quote may return `isComplexBridge: true`, indicating a bridge intent signature is required in addition to (or instead of) Permit2.
 
-**When it's needed:** Check `quote.isComplexBridge === true`
+**Self-contained (Path A):** Pass `bridgeSigningPayload` from the quote to `haiku_execute` — it handles the bridge signature internally.
 
-**What to sign:** `quote.destinationBridge.unsignedTypeV4Digest` (EIP-712 typed data)
-
-**Workflow:**
-1. Get quote with `haiku_get_quote`
-2. If `isComplexBridge` is true:
-   - Sign the `destinationBridge.unsignedTypeV4Digest` typed data
-   - Pass the signature as `userSignature` to `haiku_solve`
-3. Sign and broadcast the returned transaction
+**External wallet (Path B):** Call `haiku_prepare_signatures` with the quoteId — it returns a normalized `bridgeIntent` EIP-712 payload. Sign it via your wallet MCP and pass the result as `userSignature` to `haiku_execute`.
 
 ## Development
 

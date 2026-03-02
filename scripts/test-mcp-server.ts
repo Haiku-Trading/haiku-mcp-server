@@ -217,25 +217,6 @@ async function runTests() {
     }
     console.log();
 
-    // Test 5: haiku_solve (if we have a quote)
-    console.log("5. Testing haiku_solve...");
-    console.log("-".repeat(40));
-    if (quoteId) {
-      const solveResponse = await client.callTool("haiku_solve", {
-        quoteId: quoteId,
-      });
-      if (solveResponse.error) {
-        console.error(`✗ Error: ${solveResponse.error.message}`);
-      } else {
-        const content = (solveResponse.result as any)?.content?.[0]?.text || "";
-        console.log(`✓ Transaction built`);
-        console.log(`  Preview: ${content.substring(0, 300)}...`);
-      }
-    } else {
-      console.log(`⚠ Skipping - no quote ID from previous steps`);
-    }
-    console.log();
-
     console.log("=".repeat(60));
     console.log("MCP Server Integration Test Complete!");
     console.log("=".repeat(60));

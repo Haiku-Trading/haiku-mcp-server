@@ -133,23 +133,6 @@ async function main() {
   }
   console.log();
 
-  // 9. Solve
-  console.log("9. haiku_solve");
-  if (quoteId) {
-    try {
-      const request = { quoteId };
-      const response = await client.solve(request);
-      savePayload("09-solve", { request, response });
-      console.log(`   Transaction to: ${response.to}`);
-    } catch (e: any) {
-      console.error(`   Error: ${e.message}`);
-    }
-  } else {
-    console.log("   Skipped - no quote ID");
-  }
-  console.log();
-
-
   console.log("=".repeat(60));
   console.log("Done! Browse JSON files in ./qa-payloads/");
   console.log("=".repeat(60));

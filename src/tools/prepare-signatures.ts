@@ -20,7 +20,7 @@ export const prepareSignaturesSchema = z.object({
 type PrepareSignaturesParams = z.infer<typeof prepareSignaturesSchema>;
 
 export interface PrepareSignaturesResult {
-  /** Quote ID to pass to haiku_solve */
+  /** Quote ID to pass to haiku_execute */
   quoteId: string;
 
   /** Source chain for the transaction */
@@ -168,8 +168,10 @@ function generateInstructions(result: PrepareSignaturesResult): string {
   }
 
   steps.push(
-    `${steps.length + 1}. Call haiku_solve with:`,
+    `${steps.length + 1}. Call haiku_execute with:`,
     `   - quoteId: "${result.quoteId}"`,
+    `   - sourceChainId: ${result.sourceChainId}`,
+    `   - broadcast: false`,
     result.requiresPermit2 ? `   - permit2Signature: <signature from step 1>` : "",
     result.requiresBridgeSignature
       ? `   - userSignature: <signature from step ${result.requiresPermit2 ? 2 : 1}>`
