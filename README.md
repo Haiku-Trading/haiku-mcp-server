@@ -79,7 +79,7 @@ With API key for higher rate limits:
 Get supported tokens and DeFi assets for trading.
 
 **Parameters:**
-- `chainId` (optional): Filter by chain ID (e.g., 42161 for Arbitrum)
+- `network` (optional): Filter by chain ID (e.g., 42161 for Arbitrum)
 - `category` (optional): Filter by token category:
   - `token` - Vanilla tokens (ETH, USDC, etc.)
   - `collateral` - eg. Aave aTokens (deposited collateral)
@@ -91,7 +91,7 @@ Get supported tokens and DeFi assets for trading.
 **Example:**
 ```json
 {
-  "chainId": 42161,
+  "network": 42161,
   "category": "token"
 }
 ```
@@ -101,7 +101,7 @@ Get supported tokens and DeFi assets for trading.
 Get token balances for a wallet address across all chains.
 
 **Parameters:**
-- `walletAddress` (required): Wallet address or ENS name
+- `walletAddress` (optional): Wallet address or ENS name. Required when `WALLET_PRIVATE_KEY` is not set; omit to auto-derive from `WALLET_PRIVATE_KEY` when it is set.
 
 **Example:**
 ```json
@@ -109,6 +109,7 @@ Get token balances for a wallet address across all chains.
   "walletAddress": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
 }
 ```
+Omit `walletAddress` when `WALLET_PRIVATE_KEY` is set to use the derived address.
 
 ### `haiku_get_quote`
 
@@ -120,7 +121,7 @@ Get a quote for a token swap or portfolio rebalance.
 - `inputPositions` (required): Map of token IID to amount to spend
 - `targetWeights` (required): Map of output token IID to weight (must sum to 1)
 - `slippage` (optional): Max slippage as decimal (default: 0.003)
-- `receiver`: Receiving wallet address. **Required when `WALLET_PRIVATE_KEY` is not set** — must be provided explicitly. When `WALLET_PRIVATE_KEY` is set, auto-derived if omitted.
+- `receiver`: Receiving wallet address. **Required when `WALLET_PRIVATE_KEY` is not set** — must be provided explicitly. When `WALLET_PRIVATE_KEY` is set, auto-derived if omitted. When `WALLET_PRIVATE_KEY` is not set (Path B), you must pass `receiver` explicitly.
 
 **Example:**
 ```json
@@ -135,15 +136,16 @@ Get a quote for a token swap or portfolio rebalance.
   "slippage": 0.005
 }
 ```
+Example above omits `receiver` (valid when `WALLET_PRIVATE_KEY` is set). For Path B, include `"receiver": "0x..."`.
 
 ### `haiku_prepare_signatures`
 
-Extract and normalize EIP-712 signing payloads from a quote for external wallet signing (Path B only).
+Extract and normalize EIP-712 signing payloads from a quote for external wallet signing (Path B only). When using `quoteId`, the quote must have been obtained in the same session.
 
 Use this when a wallet MCP handles signing (Coinbase Payments MCP, wallet-agent, AgentKit, Safe, etc.). Returns standardized typed data that any wallet's `signTypedData` can consume, plus step-by-step instructions.
 
 **Parameters:**
-- `quoteId` (preferred): Quote ID from `haiku_get_quote` — server resolves the full quote from session cache
+- `quoteId` (preferred): Quote ID from `haiku_get_quote` — server resolves the full quote from session cache. QuoteId only works when the quote was returned by `haiku_get_quote` in the same MCP session; otherwise use `quoteResponse`.
 - `quoteResponse` (fallback): Full response object from `haiku_get_quote`, if quoteId is unavailable
 
 **Returns:**
@@ -167,10 +169,10 @@ Discover yield-bearing opportunities across DeFi protocols, ranked by APY or TVL
 
 Use this to answer questions like "best lending yields on Arbitrum", "highest APY vaults
 with at least $1M TVL", or "what can I do with USDC on Base". The `iid` field in results
-can be used directly as a `targetWeight` key in `haiku_get_quote`.
+can be used directly as a key in the `targetWeights` object in `haiku_get_quote`.
 
 **Parameters:**
-- `chainId` (optional): Filter by chain ID (e.g., 42161 for Arbitrum)
+- `network` (optional): Filter by chain ID (e.g., 42161 for Arbitrum)
 - `category` (optional): `lending` (Aave collateral), `vault` (Yearn/Morpho), `lp` (Balancer/Uniswap), `all` (default)
 - `minApy` (optional): Minimum APY as a percentage (e.g., `5` means ≥5% APY)
 - `minTvl` (optional): Minimum TVL in USD (e.g., `1000000` means ≥$1M). Filters to established mainstream vaults.
@@ -180,7 +182,7 @@ can be used directly as a `targetWeight` key in `haiku_get_quote`.
 **Example:**
 ```json
 {
-  "chainId": 42161,
+  "network": 42161,
   "category": "lending",
   "minTvl": 1000000,
   "sortBy": "apy",
@@ -214,7 +216,7 @@ Execute a quote. Two distinct paths depending on who holds the private key.
 
 **Parameters:**
 - `quoteId` (required): Quote ID from `haiku_get_quote`
-- `sourceChainId` (required): Chain ID from the quote response
+- `sourceChainId` (recommended): Chain ID from the quote response. Omit only if the quote was obtained in the same session — the server can recover from cache.
 - `permit2SigningPayload` (optional): Pass through from `haiku_get_quote` if present
 - `bridgeSigningPayload` (optional): Pass through from `haiku_get_quote` if present (cross-chain only)
 - `approvals` (optional): Pass through from `haiku_get_quote` if present
@@ -231,15 +233,15 @@ Execute a quote. Two distinct paths depending on who holds the private key.
 
 ---
 
-**Path B — External wallet** (no `WALLET_PRIVATE_KEY`, using a wallet MCP): You sign and broadcast. `broadcast: false` is **required** — without `WALLET_PRIVATE_KEY`, haiku cannot sign or send the final EVM transaction.
+**Path B — External wallet** (no `WALLET_PRIVATE_KEY`, using a wallet MCP): You sign and broadcast. `broadcast: false` is **required** — without `WALLET_PRIVATE_KEY`, haiku cannot sign or send the final EVM transaction. If you call `haiku_execute` with `broadcast: true` and no `WALLET_PRIVATE_KEY`, the server returns an error directing you to set `broadcast: false` and broadcast the returned transaction via your wallet MCP.
 
 Before calling `haiku_execute`:
-1. If `approvals` is non-empty in the quote: broadcast each approval as a `{to, data}` transaction via your wallet MCP and wait for confirmation.
+1. If `approvals` is non-empty in the quote: broadcast each approval as a transaction `{ to, data, value }` (include `value` when present, e.g. for native token) via your wallet MCP and wait for confirmation.
 2. If signatures are required: call `haiku_prepare_signatures` with the quoteId, sign the returned EIP-712 payloads via your wallet MCP, then pass the signatures here.
 
 **Parameters:**
 - `quoteId` (required): Quote ID from `haiku_get_quote`
-- `sourceChainId` (required): Chain ID from the quote response
+- `sourceChainId` (recommended): Chain ID from the quote response. Omit only if the quote was obtained in the same session — the server can recover from cache.
 - `broadcast` (required): Must be `false` — haiku returns the unsigned tx for you to broadcast
 - `permit2Signature` (optional): Signature from signing the Permit2 payload via your wallet MCP
 - `userSignature` (optional): Signature from signing the bridge payload via your wallet MCP (cross-chain only)
@@ -279,6 +281,7 @@ Examples:
 | Hyperliquid | 999 | hype |
 | Katana | 747474 | katana |
 | Lisk | 1135 | lisk |
+| MegaETH | 4326 | megaeth |
 | Monad | 143 | monad |
 | Optimism | 10 | opt |
 | Plasma | 9745 | plasma |
@@ -309,7 +312,7 @@ Use when WALLET_PRIVATE_KEY is not set and a separate wallet MCP holds the keys.
 **Simple swap (no Permit2 or bridge signatures needed, e.g. native ETH input):**
 ```
 1. haiku_get_quote(inputPositions, targetWeights, receiver) → returns quoteId, sourceChainId, approvals
-2. For each item in approvals: broadcast {to, data} via wallet MCP and wait for confirmation
+2. For each item in approvals: broadcast as transaction { to, data, value } (include value when present) via wallet MCP and wait for confirmation
 3. haiku_execute(quoteId, sourceChainId, broadcast: false)
    → returns { transaction: { to, data, value, chainId } }
 4. Broadcast transaction via wallet MCP
@@ -318,7 +321,7 @@ Use when WALLET_PRIVATE_KEY is not set and a separate wallet MCP holds the keys.
 **With Permit2 or bridge signatures (e.g. ERC-20 input or cross-chain swap):**
 ```
 1. haiku_get_quote(inputPositions, targetWeights, receiver) → returns quoteId, sourceChainId, approvals, permit2SigningPayload?, bridgeSigningPayload?
-2. For each item in approvals: broadcast {to, data} via wallet MCP and wait for confirmation
+2. For each item in approvals: broadcast as transaction { to, data, value } (include value when present) via wallet MCP and wait for confirmation
 3. haiku_prepare_signatures(quoteId) → returns normalized EIP-712 payloads + step-by-step instructions
 4. Sign payloads via wallet MCP (e.g. coinbase_sign_typed_data) → get permit2Signature?, userSignature?
 5. haiku_execute(quoteId, sourceChainId, permit2Signature?, userSignature?, broadcast: false)
@@ -329,8 +332,8 @@ Use when WALLET_PRIVATE_KEY is not set and a separate wallet MCP holds the keys.
 ### Yield Discovery
 
 ```
-1. haiku_discover_yields with category/chain/minTvl filters → find opportunities, note iid
-2. haiku_get_quote with the chosen iid as a targetWeight
+1. haiku_discover_yields with category/network/minTvl filters → find opportunities, note iid
+2. haiku_get_quote with the chosen iid as a key in targetWeights
 3. Execute via Path A or Path B above
 ```
 
@@ -349,7 +352,7 @@ Two modes depending on your setup:
 
 **Self-contained** (`WALLET_PRIVATE_KEY` set): `haiku_execute` signs everything internally and broadcasts. Returns a tx hash. No external signing needed.
 
-**External wallet** (no `WALLET_PRIVATE_KEY`): Use `haiku_execute` with `broadcast: false` (required — haiku cannot sign or broadcast without the private key). Returns `{ transaction: { to, data, value, chainId } }` for your wallet MCP to broadcast. If Permit2 or bridge signatures are required, call `haiku_prepare_signatures` first. If approvals are present in the quote, broadcast each `{to, data}` via your wallet MCP before calling `haiku_execute`.
+**External wallet** (no `WALLET_PRIVATE_KEY`): Use `haiku_execute` with `broadcast: false` (required — haiku cannot sign or broadcast without the private key). If you call `haiku_execute` with `broadcast: true` and no `WALLET_PRIVATE_KEY`, the server returns an error directing you to set `broadcast: false` and broadcast the returned transaction via your wallet MCP. Returns `{ transaction: { to, data, value, chainId } }` for your wallet MCP to broadcast. If Permit2 or bridge signatures are required, call `haiku_prepare_signatures` first. If approvals are present in the quote, broadcast each approval `{ to, data, value }` (include `value` when present, e.g. for native token) via your wallet MCP before calling `haiku_execute`.
 
 The external wallet design allows agents to use any signing infrastructure (wallet MCPs, hardware wallets, custodial services, MPC, etc.).
 
