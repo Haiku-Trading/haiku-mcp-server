@@ -114,13 +114,13 @@ Get token balances for a wallet address across all chains.
 
 Get a quote for a token swap or portfolio rebalance.
 
-> **Note:** Quotes expire after ~30 seconds. If `haiku_execute` returns a quote-expired error, request a fresh quote and retry the flow.
+> **Note:** Quotes are valid for 5 minutes, but execute as quickly as possible after quoting — the longer you wait, the more likely prices have moved and the transaction will fail on-chain.
 
 **Parameters:**
 - `inputPositions` (required): Map of token IID to amount to spend
 - `targetWeights` (required): Map of output token IID to weight (must sum to 1)
 - `slippage` (optional): Max slippage as decimal (default: 0.003)
-- `receiver` (optional): Receiving wallet address
+- `receiver`: Receiving wallet address. **Required when `WALLET_PRIVATE_KEY` is not set** — must be provided explicitly. When `WALLET_PRIVATE_KEY` is set, auto-derived if omitted.
 
 **Example:**
 ```json
@@ -231,17 +231,18 @@ Execute a quote. Two distinct paths depending on who holds the private key.
 
 ---
 
-**Path B — External wallet** (no `WALLET_PRIVATE_KEY`, using a wallet MCP): You sign and broadcast. Set `broadcast: false` — haiku returns `{to, data, value}` for you to broadcast.
+**Path B — External wallet** (no `WALLET_PRIVATE_KEY`, using a wallet MCP): You sign and broadcast. `broadcast: false` is **required** — without `WALLET_PRIVATE_KEY`, haiku cannot sign or send the final EVM transaction.
 
-Pre-requisite: if the quote requires Permit2 or bridge signatures, call `haiku_prepare_signatures` first, sign via your wallet MCP, then pass the signatures here.
+Before calling `haiku_execute`:
+1. If `approvals` is non-empty in the quote: broadcast each approval as a `{to, data}` transaction via your wallet MCP and wait for confirmation.
+2. If signatures are required: call `haiku_prepare_signatures` with the quoteId, sign the returned EIP-712 payloads via your wallet MCP, then pass the signatures here.
 
 **Parameters:**
 - `quoteId` (required): Quote ID from `haiku_get_quote`
 - `sourceChainId` (required): Chain ID from the quote response
-- `broadcast` (required): Set to `false` to return unsigned tx instead of broadcasting
+- `broadcast` (required): Must be `false` — haiku returns the unsigned tx for you to broadcast
 - `permit2Signature` (optional): Signature from signing the Permit2 payload via your wallet MCP
 - `userSignature` (optional): Signature from signing the bridge payload via your wallet MCP (cross-chain only)
-- `approvals` (optional): Pass through from `haiku_get_quote` if present — handle these via your wallet MCP before calling haiku_execute
 
 **Example:**
 ```json
@@ -249,11 +250,10 @@ Pre-requisite: if the quote requires Permit2 or bridge signatures, call `haiku_p
   "quoteId": "abc123...",
   "sourceChainId": 42161,
   "broadcast": false,
-  "permit2Signature": "0x...",
-  "approvals": [ /* from haiku_get_quote, if present */ ]
+  "permit2Signature": "0x..."
 }
 ```
-Returns `{ to, data, value }` — broadcast this via your wallet MCP.
+Returns `{ transaction: { to, data, value, chainId } }` — pass `transaction` to your wallet MCP's `sendTransaction`.
 
 ## Token IID Format
 
@@ -297,9 +297,9 @@ Examples:
 Haiku handles all signing and broadcasting. Returns a tx hash.
 
 ```
-1. haiku_get_quote → returns quoteId, sourceChainId, permit2SigningPayload?, bridgeSigningPayload?, approvals?
-2. haiku_execute(quoteId, sourceChainId, permit2SigningPayload?, bridgeSigningPayload?, approvals?)
-   → Haiku signs Permit2/bridge internally, broadcasts, returns tx hash
+1. haiku_get_quote(inputPositions, targetWeights) → returns quoteId, sourceChainId, permit2SigningPayload?, bridgeSigningPayload?, approvals
+2. haiku_execute(quoteId, sourceChainId, permit2SigningPayload?, bridgeSigningPayload?, approvals)
+   → Haiku broadcasts approvals, signs Permit2/bridge internally, broadcasts swap, returns tx hash
 ```
 
 ### Path B: External Wallet (wallet MCP handles signing + broadcasting)
@@ -308,22 +308,22 @@ Use when WALLET_PRIVATE_KEY is not set and a separate wallet MCP holds the keys.
 
 **Simple swap (no Permit2 or bridge signatures needed, e.g. native ETH input):**
 ```
-1. haiku_get_quote → returns quoteId, sourceChainId, approvals?
-2. Handle approvals via wallet MCP if present
+1. haiku_get_quote(inputPositions, targetWeights, receiver) → returns quoteId, sourceChainId, approvals
+2. For each item in approvals: broadcast {to, data} via wallet MCP and wait for confirmation
 3. haiku_execute(quoteId, sourceChainId, broadcast: false)
-   → returns { to, data, value }
-4. Broadcast { to, data, value } via wallet MCP
+   → returns { transaction: { to, data, value, chainId } }
+4. Broadcast transaction via wallet MCP
 ```
 
 **With Permit2 or bridge signatures (e.g. ERC-20 input or cross-chain swap):**
 ```
-1. haiku_get_quote → returns quoteId, sourceChainId, permit2Datas?, destinationBridge?, approvals?
-2. haiku_prepare_signatures(quoteId) → returns normalized EIP-712 payloads + instructions
-3. Sign payloads via wallet MCP (e.g. coinbase_sign_typed_data) → get permit2Signature?, userSignature?
-4. Handle approvals via wallet MCP if present
-5. haiku_execute(quoteId, sourceChainId, permit2Signature?, userSignature?, approvals?, broadcast: false)
-   → returns { to, data, value }
-6. Broadcast { to, data, value } via wallet MCP (e.g. coinbase_send_transaction)
+1. haiku_get_quote(inputPositions, targetWeights, receiver) → returns quoteId, sourceChainId, approvals, permit2SigningPayload?, bridgeSigningPayload?
+2. For each item in approvals: broadcast {to, data} via wallet MCP and wait for confirmation
+3. haiku_prepare_signatures(quoteId) → returns normalized EIP-712 payloads + step-by-step instructions
+4. Sign payloads via wallet MCP (e.g. coinbase_sign_typed_data) → get permit2Signature?, userSignature?
+5. haiku_execute(quoteId, sourceChainId, permit2Signature?, userSignature?, broadcast: false)
+   → returns { transaction: { to, data, value, chainId } }
+6. Broadcast transaction via wallet MCP (e.g. coinbase_send_transaction)
 ```
 
 ### Yield Discovery
@@ -349,7 +349,7 @@ Two modes depending on your setup:
 
 **Self-contained** (`WALLET_PRIVATE_KEY` set): `haiku_execute` signs everything internally and broadcasts. Returns a tx hash. No external signing needed.
 
-**External wallet** (no `WALLET_PRIVATE_KEY`): The AI agent is responsible for signing and broadcasting. Use `haiku_execute` with `broadcast: false` to get an unsigned `{to, data, value}` transaction, then broadcast it via your wallet MCP. If Permit2 or bridge signatures are required, call `haiku_prepare_signatures` first to get normalized EIP-712 payloads, sign via your wallet MCP, and pass the signatures to `haiku_execute`.
+**External wallet** (no `WALLET_PRIVATE_KEY`): Use `haiku_execute` with `broadcast: false` (required — haiku cannot sign or broadcast without the private key). Returns `{ transaction: { to, data, value, chainId } }` for your wallet MCP to broadcast. If Permit2 or bridge signatures are required, call `haiku_prepare_signatures` first. If approvals are present in the quote, broadcast each `{to, data}` via your wallet MCP before calling `haiku_execute`.
 
 The external wallet design allows agents to use any signing infrastructure (wallet MCPs, hardware wallets, custodial services, MPC, etc.).
 

@@ -101,7 +101,7 @@ const TOOLS = [
       "When signatures are required (Permit2 or bridge), EIP-712 signing payloads are included in the response. " +
       "Two execution paths after getting a quote:\n" +
       "• Path A — Self-contained (WALLET_PRIVATE_KEY set): call haiku_execute with quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present in this response), and approvals. Haiku signs and broadcasts automatically — returns tx hash.\n" +
-      "• Path B — External wallet (wallet MCP): call haiku_prepare_signatures with quoteId to get EIP-712 payloads → sign via wallet MCP → call haiku_execute with quoteId, sourceChainId, the signatures, approvals, and broadcast: false → haiku_execute returns {to, data, value} → broadcast via wallet MCP.",
+      "• Path B — External wallet (wallet MCP, broadcast: false required): (1) broadcast any approvals {to, data} via wallet MCP first; (2) call haiku_prepare_signatures with quoteId if signatures are needed → sign via wallet MCP; (3) call haiku_execute with quoteId, sourceChainId, signatures, and broadcast: false → returns { transaction: { to, data, value, chainId } } → broadcast transaction via wallet MCP.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -130,7 +130,7 @@ const TOOLS = [
         },
         receiver: {
           type: "string",
-          description: "Receiving wallet address. Defaults to sender.",
+          description: "Receiving wallet address. Required when WALLET_PRIVATE_KEY is not set — must be provided explicitly. When WALLET_PRIVATE_KEY is set, auto-derived from it if omitted.",
         },
       },
       required: ["inputPositions", "targetWeights"],
@@ -225,10 +225,10 @@ const TOOLS = [
   {
     name: "haiku_execute",
     description:
-      "Step 2 of 2: Execute a quote. Call haiku_get_quote first, then choose a path:\n" +
-      "• Path A — Self-contained (WALLET_PRIVATE_KEY set): pass quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present in the quote), and approvals. Haiku signs Permit2/bridge internally and broadcasts. Returns tx hash.\n" +
-      "• Path B — External wallet: call haiku_prepare_signatures first to get EIP-712 payloads → sign via wallet MCP → pass quoteId, sourceChainId, permit2Signature + userSignature (from signing), approvals, and broadcast: false. Returns {to, data, value} unsigned tx for you to broadcast via your wallet MCP.\n" +
-      "Always pass sourceChainId and approvals from the quote response.",
+      "Execute a quote. Call haiku_get_quote first, then choose a path:\n" +
+      "• Path A — Self-contained (WALLET_PRIVATE_KEY set): pass quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present in the quote), and approvals. Haiku signs Permit2/bridge internally, sends any approvals on-chain, and broadcasts. Returns tx hash.\n" +
+      "• Path B — External wallet (no WALLET_PRIVATE_KEY): broadcast: false is required. First broadcast any approvals from the quote via your wallet MCP (each is a {to, data} transaction). Then call haiku_prepare_signatures if signatures are needed → sign via wallet MCP → call haiku_execute with quoteId, sourceChainId, the signatures, and broadcast: false. Returns { transaction: { to, data, value, chainId } } — broadcast transaction via your wallet MCP.\n" +
+      "Always pass sourceChainId from the quote response.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -255,7 +255,7 @@ const TOOLS = [
         approvals: {
           type: "array",
           items: { type: "object" },
-          description: "approvals from haiku_get_quote — sent automatically in self-contained mode",
+          description: "approvals from haiku_get_quote. Self-contained mode only: haiku broadcasts these on-chain before the swap. In external wallet mode (broadcast: false), do not pass these — broadcast each approval {to, data} via your wallet MCP before calling haiku_execute.",
         },
         sourceChainId: {
           type: "number",
@@ -334,7 +334,7 @@ export function createServer(): Server {
           return {
             content: [
               { type: "text", text: formatQuoteResponse(result) },
-              { type: "text", text: "\n\n---\nNext steps — choose one path:\n• Path A (self-contained, WALLET_PRIVATE_KEY set): call haiku_execute with quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present above), and approvals (if present). Haiku signs and broadcasts — returns tx hash.\n• Path B (external wallet): call haiku_prepare_signatures with quoteId → sign the returned EIP-712 payloads via your wallet MCP → call haiku_execute with quoteId, sourceChainId, the signatures, approvals, and broadcast: false → haiku_execute returns {to, data, value} → broadcast via your wallet MCP.\n\nFull quote data:\n" + JSON.stringify(result, null, 2) },
+              { type: "text", text: "\n\n---\nNext steps — choose one path:\n• Path A (self-contained, WALLET_PRIVATE_KEY set): call haiku_execute with quoteId, sourceChainId, permit2SigningPayload + bridgeSigningPayload (if present above), and approvals (if present). Haiku handles approvals, signing, and broadcasting — returns tx hash.\n• Path B (external wallet, broadcast: false required):\n  1. If approvals present: broadcast each {to, data} via your wallet MCP first.\n  2. If signatures required: call haiku_prepare_signatures with quoteId → sign returned EIP-712 payloads via your wallet MCP.\n  3. Call haiku_execute with quoteId, sourceChainId, any signatures, and broadcast: false.\n  4. Broadcast result.transaction.{to, data, value, chainId} via your wallet MCP.\n\nFull quote data:\n" + JSON.stringify(result, null, 2) },
             ],
           };
         }
