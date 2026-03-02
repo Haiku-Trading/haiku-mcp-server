@@ -157,9 +157,14 @@ export function formatQuoteResponse(response: QuoteToolResponse): string {
     }
   }
 
+  const gasUSD = parseFloat(response.gas.usd);
+  const formattedGasUSD = gasUSD >= 0.01
+    ? gasUSD.toFixed(2)
+    : gasUSD.toPrecision(3);
+
   lines.push(
     "",
-    `Gas Estimate: ${response.gas.amount} (~$${response.gas.usd})`
+    `Gas Estimate: ${response.gas.amount} (~$${formattedGasUSD})`
   );
 
   if (response.approvals.length > 0) {
