@@ -415,9 +415,12 @@ export function createServer(): Server {
 
         case "haiku_execute": {
           const params = executeSchema.parse(args);
+          const cached = quoteCache.get(params.quoteId);
           const resolvedParams = {
             ...params,
-            sourceChainId: params.sourceChainId ?? quoteCache.get(params.quoteId)?.sourceChainId,
+            sourceChainId: params.sourceChainId ?? cached?.sourceChainId,
+            permit2SigningPayload: params.permit2SigningPayload ?? (cached?.permit2SigningPayload as unknown as Record<string, unknown>),
+            bridgeSigningPayload: params.bridgeSigningPayload ?? (cached?.bridgeSigningPayload as unknown as Record<string, unknown>),
           };
           const result = await handleExecute(haikuClient, resolvedParams);
           return {

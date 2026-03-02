@@ -80,7 +80,7 @@ export async function handleGetQuote(
   });
 
   const requiresPermit2Signature = !!response.permit2Datas;
-  const requiresBridgeSignature = response.isComplexBridge && !!response.destinationBridge;
+  const requiresBridgeSignature = response.isComplexBridge && !!response.destinationBridge?.unsignedTypeV4Digest;
 
   // Derive sourceChainId: permit2 domain is most reliable; fallback to slug from first inputPositions key
   const firstInputSlug = Object.keys(params.inputPositions)[0]?.split(':')[0];
@@ -183,7 +183,7 @@ export function formatQuoteResponse(response: QuoteToolResponse): string {
     );
     if (response.permit2SigningPayload) {
       lines.push(
-        "Sign this EIP-712 typed data using signTypedData, then pass the resulting signature as `permit2Signature` to haiku_solve.",
+        "Sign this EIP-712 typed data using signTypedData, then pass the resulting signature as `permit2Signature` to haiku_execute.",
         "",
         JSON.stringify(response.permit2SigningPayload, null, 2)
       );
@@ -201,7 +201,7 @@ export function formatQuoteResponse(response: QuoteToolResponse): string {
     );
     if (response.bridgeSigningPayload) {
       lines.push(
-        "Sign this EIP-712 typed data using signTypedData, then pass the resulting signature as `userSignature` to haiku_solve.",
+        "Sign this EIP-712 typed data using signTypedData, then pass the resulting signature as `userSignature` to haiku_execute.",
         "",
         JSON.stringify(response.bridgeSigningPayload, null, 2)
       );
