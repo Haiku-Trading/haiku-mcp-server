@@ -122,8 +122,8 @@ export async function handleGetQuote(
   return sanitized;
 }
 
-function tokenLabel(token: { symbol: string; chainId: number }): string {
-  const slug = CHAIN_ID_TO_SLUG[token.chainId] ?? `chain:${token.chainId}`;
+function tokenLabel(token: { symbol: string; network: number }): string {
+  const slug = CHAIN_ID_TO_SLUG[token.network] ?? `chain:${token.network}`;
   return `${token.symbol} (${slug})`;
 }
 

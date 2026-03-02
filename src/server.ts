@@ -57,10 +57,10 @@ const TOOLS = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        chainId: {
+        network: {
           type: "number",
           description:
-            "Filter tokens by chain ID. Common chains: 42161 (Arbitrum), 8453 (Base), 1 (Ethereum), 137 (Polygon), 10 (Optimism), 56 (BSC)",
+            "Filter tokens by network. Common networks: 42161 (Arbitrum), 8453 (Base), 1 (Ethereum), 137 (Polygon), 10 (Optimism), 56 (BSC)",
         },
         category: {
           type: "string",
@@ -203,10 +203,10 @@ const TOOLS = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        chainId: {
+        network: {
           type: "number",
           description:
-            "Filter by chain ID. Common chains: 42161 (Arbitrum), 8453 (Base), 1 (Ethereum), 137 (Polygon), 10 (Optimism), 56 (BNB Chain)",
+            "Filter by network. Common networks: 42161 (Arbitrum), 8453 (Base), 1 (Ethereum), 137 (Polygon), 10 (Optimism), 56 (BNB Chain)",
         },
         category: {
           type: "string",

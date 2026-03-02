@@ -104,7 +104,7 @@ export function handlePrepareSignatures(
 
   const sourceChainId =
     quoteResponse.permit2Datas?.domain?.chainId ||
-    quoteResponse.funds?.[0]?.token?.chainId || 1;
+    quoteResponse.funds?.[0]?.token?.network || 1;
   const requiresPermit2 = !!quoteResponse.permit2Datas;
   const bridgeTypedData = quoteResponse.destinationBridge?.unsignedTypeV4Digest;
   const requiresBridgeSignature = !!bridgeTypedData;

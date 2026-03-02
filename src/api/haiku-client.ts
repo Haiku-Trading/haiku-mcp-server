@@ -73,7 +73,7 @@ export class HaikuClient {
    * Multi-value params (chainId, category, protocol) can be arrays — they are comma-joined.
    */
   async getTokenList(params?: {
-    chainId?: number | number[];
+    network?: number | number[];
     category?: string | string[];
     protocol?: string | string[];
     symbol?: string | string[];
@@ -85,10 +85,10 @@ export class HaikuClient {
     limit?: number;
   }): Promise<TokenListResponse> {
     const query = new URLSearchParams();
-    if (params?.chainId !== undefined) {
-      const ids = Array.isArray(params.chainId)
-        ? params.chainId.join(",")
-        : String(params.chainId);
+    if (params?.network !== undefined) {
+      const ids = Array.isArray(params.network)
+        ? params.network.join(",")
+        : String(params.network);
       query.set("chainId", ids);
     }
     if (params?.category !== undefined) {

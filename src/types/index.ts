@@ -10,7 +10,7 @@ export type TokenIID = string;
  * Token information returned by /tokenList
  */
 export interface Token {
-  chainId: number;
+  network: number;
   address: string;
   symbol: string;
   name: string;
@@ -183,7 +183,7 @@ export interface IntentResponse {
  * Token object returned inline by the /quote endpoint
  */
 export interface ApiToken {
-  chainId: number;
+  network: number;
   address: string;
   decimals: number;
   symbol: string;

@@ -3,11 +3,11 @@ import type { HaikuClient } from "../api/haiku-client.js";
 import type { Token } from "../types/index.js";
 
 export const discoverYieldsSchema = z.object({
-  chainId: z
+  network: z
     .number()
     .optional()
     .describe(
-      "Filter by chain ID. Common chains: 42161 (Arbitrum), 8453 (Base), 1 (Ethereum), 137 (Polygon), 10 (Optimism), 56 (BNB Chain)"
+      "Filter by network. Common networks: 42161 (Arbitrum), 8453 (Base), 1 (Ethereum), 137 (Polygon), 10 (Optimism), 56 (BNB Chain)"
     ),
   category: z
     .enum(["lending", "vault", "lp", "all"])
@@ -51,7 +51,7 @@ export interface YieldEntry {
   symbol: string;
   name: string;
   protocol?: string;
-  chainId: number;
+  network: number;
   category: string;
   apy: number;
   tvl?: number;
@@ -135,11 +135,11 @@ function formatTvl(tvl: number): string {
 function buildSummary(
   symbol: string,
   protocol: string | undefined,
-  chainId: number,
+  network: number,
   apy: number,
   tvl: number | undefined
 ): string {
-  const chain = CHAIN_NAMES[chainId] ?? `Chain ${chainId}`;
+  const chain = CHAIN_NAMES[network] ?? `Chain ${network}`;
   const protocolLabel = protocol
     ? (PROTOCOL_LABELS[protocol] ?? protocol) + " "
     : "";
@@ -166,7 +166,7 @@ export async function handleDiscoverYields(
   const backendCategories = categoryMap[category];
 
   const response = await client.getTokenList({
-    chainId: params.chainId,
+    network: params.network,
     category: backendCategories,
     protocol: params.protocol,
     sortBy: params.sortBy ?? "apy",
@@ -210,7 +210,7 @@ export async function handleDiscoverYields(
       symbol: token.symbol,
       name: token.name,
       ...(token.protocol && { protocol: token.protocol }),
-      chainId: token.chainId,
+      network: token.network,
       category: cat,
       apy,
       ...(tvlVal > 0 && { tvl: tvlVal }),
@@ -224,7 +224,7 @@ export async function handleDiscoverYields(
       ...(token.underlying_iids && { underlying_iids: token.underlying_iids }),
       ...(token.feeTier !== undefined && { feeTier: token.feeTier }),
       ...(token.poolId && { poolId: token.poolId }),
-      summary: buildSummary(token.symbol, token.protocol, token.chainId, apy, tvlVal > 0 ? tvlVal : undefined),
+      summary: buildSummary(token.symbol, token.protocol, token.network, apy, tvlVal > 0 ? tvlVal : undefined),
     };
   });
 
@@ -241,7 +241,7 @@ export async function handleDiscoverYields(
     shown: entries.length,
     sortedBy: sortBy,
     filters: {
-      chainId: params.chainId,
+      network: params.network,
       category,
       protocol: params.protocol,
       minApy: params.minApy,

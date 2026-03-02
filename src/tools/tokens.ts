@@ -20,11 +20,11 @@ export type TokenCategory = (typeof tokenCategories)[number];
  * Schema for haiku_get_tokens tool parameters
  */
 export const getTokensSchema = z.object({
-  chainId: z
+  network: z
     .number()
     .optional()
     .describe(
-      "Filter tokens by chain ID (e.g., 42161 for Arbitrum, 8453 for Base, 1 for Ethereum)"
+      "Filter tokens by network (e.g., 42161 for Arbitrum, 8453 for Base, 1 for Ethereum)"
     ),
   category: z
     .enum(tokenCategories)
@@ -84,7 +84,7 @@ export async function handleGetTokens(
   params: GetTokensParams
 ) {
   const response = await client.getTokenList({
-    ...(params.chainId !== undefined && { chainId: params.chainId }),
+    ...(params.network !== undefined && { network: params.network }),
     ...(params.protocol !== undefined && { protocol: params.protocol }),
     ...(params.symbol !== undefined && { symbol: params.symbol }),
     ...(params.address !== undefined && { address: params.address }),
@@ -114,7 +114,7 @@ export async function handleGetTokens(
       iid: token.iid,
       symbol: token.symbol,
       name: token.name,
-      chainId: token.chainId,
+      network: token.network,
       decimals: token.decimals,
       priceUSD: token.priceUSD,
       category: token.tokenCategory,

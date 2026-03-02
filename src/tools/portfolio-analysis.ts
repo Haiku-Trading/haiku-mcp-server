@@ -129,7 +129,7 @@ export async function handleAnalyzePortfolio(
     if (category === "token" && token) {
       const opportunities = yieldByUnderlying.get(iid) ?? [];
       const chainOpportunities = opportunities
-        .filter((o) => o.chainId === token.chainId)
+        .filter((o) => o.network === token.network)
         .map((o): YieldOpportunity => ({
           iid: o.iid,
           ...(o.protocol && { protocol: o.protocol }),
