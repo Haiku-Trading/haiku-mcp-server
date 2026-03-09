@@ -79,7 +79,9 @@ const TOOLS = [
   {
     name: "haiku_get_balances",
     description:
-      "Get token balances for a wallet address across all supported chains. " +
+      "Get token balances for a wallet address. By default fetches across all supported chains. " +
+      "Pass chainIds for a partial refresh — only the specified chains are queried, which is faster and useful " +
+      "after a swap when you only need updated balances for the source and destination chains. " +
       "Returns balances, USD prices, total portfolio value, and categorized positions (tokens, collateral, debt, vaults). " +
       "walletAddress is optional when WALLET_PRIVATE_KEY is set in the environment.",
     inputSchema: {
@@ -88,6 +90,16 @@ const TOOLS = [
         walletAddress: {
           type: "string",
           description: "Wallet address (0x...) or ENS name. Omit to auto-derive from WALLET_PRIVATE_KEY.",
+        },
+        chainIds: {
+          type: "array",
+          items: { type: "number" },
+          description:
+            "Optional list of chain IDs to fetch balances for. " +
+            "When provided, only those chains are queried (partial refresh). " +
+            "Example: [42161, 8453] to re-fetch only Arbitrum and Base after a cross-chain swap. " +
+            "Common chain IDs: 1 (Ethereum), 42161 (Arbitrum), 8453 (Base), 137 (Polygon), 10 (Optimism), 56 (BNB Chain), 80094 (Berachain). " +
+            "Omit to fetch all chains.",
         },
       },
       required: [],

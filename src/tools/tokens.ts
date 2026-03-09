@@ -72,6 +72,14 @@ export const getBalancesSchema = z.object({
     .string()
     .optional()
     .describe("Wallet address (0x...) or ENS name. If omitted, derived from WALLET_PRIVATE_KEY env var."),
+  chainIds: z
+    .array(z.number())
+    .optional()
+    .describe(
+      "Optional list of chain IDs to fetch balances for. When provided, only those chains are queried — " +
+        "useful as a partial refresh after a swap (e.g. [42161, 8453] to re-fetch only Arbitrum and Base). " +
+        "Omit to fetch balances across all supported chains."
+    ),
 });
 
 export type GetBalancesParams = z.infer<typeof getBalancesSchema>;
@@ -176,7 +184,7 @@ export async function handleGetBalances(
     walletAddress = privateKeyToAccount(normalizedKey).address;
   }
 
-  const response = await client.getTokenBalances(walletAddress);
+  const response = await client.getTokenBalances(walletAddress, params.chainIds);
 
   // Calculate total USD value
   let totalValueUSD = 0;

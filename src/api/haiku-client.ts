@@ -127,11 +127,14 @@ export class HaikuClient {
   /**
    * Get token balances for a wallet address
    * @param address - Wallet address or ENS name
+   * @param chainIds - Optional list of chain IDs to fetch balances for (partial refresh)
    */
-  async getTokenBalances(address: string): Promise<TokenBalancesResponse> {
-    return this.request<TokenBalancesResponse>(
-      `/tokenBalances?address=${encodeURIComponent(address)}`
-    );
+  async getTokenBalances(address: string, chainIds?: number[]): Promise<TokenBalancesResponse> {
+    const query = new URLSearchParams({ address });
+    if (chainIds && chainIds.length > 0) {
+      query.set("chainIds", chainIds.join(","));
+    }
+    return this.request<TokenBalancesResponse>(`/tokenBalances?${query.toString()}`);
   }
 
   /**
