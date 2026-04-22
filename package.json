@@ -1,6 +1,6 @@
 {
   "name": "haiku-mcp-server",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "MCP server for Haiku API - enables AI agents to execute any blockchain transactions",
   "mcpName": "io.github.Haiku-Trading/haiku-mcp-server",
   "type": "module",
@@ -11,6 +11,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
+    "start:http": "node dist/index.js --http",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build"
   },

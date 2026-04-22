@@ -364,6 +364,29 @@ For cross-chain swaps, the quote may return `isComplexBridge: true`, indicating 
 
 **External wallet (Path B):** Call `haiku_prepare_signatures` with the quoteId — it returns a normalized `bridgeIntent` EIP-712 payload. Sign it via your wallet MCP and pass the result as `userSignature` to `haiku_execute`.
 
+## Transport Modes
+
+### Stdio (default)
+
+Standard MCP stdio transport — used by Claude Desktop, Cursor, etc.
+
+```bash
+npx haiku-mcp-server
+```
+
+### Streamable HTTP
+
+HTTP transport for remote hosting, Smithery, and web-based MCP clients.
+
+```bash
+npx haiku-mcp-server --http
+npx haiku-mcp-server --http --port=8080
+```
+
+Endpoints:
+- `POST /mcp` — MCP Streamable HTTP endpoint
+- `GET /health` — Health check
+
 ## Development
 
 ```bash
@@ -373,8 +396,11 @@ npm install
 # Build
 npm run build
 
-# Run locally (works without API key)
+# Run locally (stdio, works without API key)
 npm start
+
+# Run locally (HTTP)
+npm run start:http
 
 # Run with API key for higher rate limits
 HAIKU_API_KEY=your-key npm start

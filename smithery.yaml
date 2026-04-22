@@ -1,0 +1,23 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      HAIKU_API_KEY:
+        type: string
+        description: "Your Haiku API key from https://app.haiku.trade"
+      WALLET_PRIVATE_KEY:
+        type: string
+        description: "Optional wallet private key for self-contained signing (Path A). Omit for external wallet mode (Path B)."
+    required:
+      - HAIKU_API_KEY
+  commandFunction:
+    |-
+    (config) => ({
+      command: "npx",
+      args: ["-y", "haiku-mcp-server"],
+      env: {
+        HAIKU_API_KEY: config.HAIKU_API_KEY,
+        ...(config.WALLET_PRIVATE_KEY ? { WALLET_PRIVATE_KEY: config.WALLET_PRIVATE_KEY } : {})
+      }
+    })
