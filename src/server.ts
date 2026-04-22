@@ -1,5 +1,7 @@
+import { createServer as createHttpServer } from "node:http";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -423,9 +425,73 @@ export async function runServer(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Handle shutdown
   process.on("SIGINT", async () => {
     await server.close();
+    process.exit(0);
+  });
+}
+
+/**
+ * Run the MCP server with Streamable HTTP transport
+ */
+export async function runHttpServer(port = 3000): Promise<void> {
+  const sessions = new Map<string, { server: Server; transport: StreamableHTTPServerTransport }>();
+
+  const httpServer = createHttpServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", `http://localhost:${port}`);
+
+    if (url.pathname === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+
+    if (url.pathname !== "/mcp") {
+      res.writeHead(404);
+      res.end("Not found");
+      return;
+    }
+
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+    if (sessionId && sessions.has(sessionId)) {
+      const session = sessions.get(sessionId)!;
+      await session.transport.handleRequest(req, res);
+      return;
+    }
+
+    if (sessionId && !sessions.has(sessionId)) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Session not found" }));
+      return;
+    }
+
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => crypto.randomUUID(),
+    });
+
+    const server = createServer();
+    await server.connect(transport);
+
+    const sid = transport.sessionId!;
+    sessions.set(sid, { server, transport });
+
+    transport.onclose = () => {
+      sessions.delete(sid);
+    };
+
+    await transport.handleRequest(req, res);
+  });
+
+  httpServer.listen(port, () => {
+    console.error(`Haiku MCP server (HTTP) listening on http://localhost:${port}/mcp`);
+  });
+
+  process.on("SIGINT", async () => {
+    for (const { server } of sessions.values()) {
+      await server.close();
+    }
+    httpServer.close();
     process.exit(0);
   });
 }
