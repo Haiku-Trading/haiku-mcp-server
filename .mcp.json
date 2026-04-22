@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "haiku": {
+      "command": "npx",
+      "args": ["haiku-mcp-server"],
+      "env": {
+        "HAIKU_API_KEY": ""
+      }
+    }
+  }
+}
