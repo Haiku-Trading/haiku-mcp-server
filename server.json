@@ -1,0 +1,38 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Haiku-Trading/haiku-mcp-server",
+  "title": "Haiku DeFi MCP",
+  "description": "DeFi execution for AI agents — swap, lend, bridge, and yield across 22 chains.",
+  "repository": {
+    "url": "https://github.com/Haiku-Trading/haiku-mcp-server",
+    "source": "github"
+  },
+  "version": "0.0.8",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "haiku-mcp-server",
+      "version": "0.0.8",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "HAIKU_API_KEY",
+          "description": "API key for higher rate limits (optional — works without)",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "WALLET_PRIVATE_KEY",
+          "description": "Private key (0x hex) for self-contained execution without an external wallet",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
